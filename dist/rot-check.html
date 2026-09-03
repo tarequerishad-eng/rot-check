@@ -1,0 +1,4863 @@
+<title>Rot Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800&family=Bungee&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* ============================================================
+   ROT CHECK
+   Single committed visual world: a phone screen at 2am.
+   Colour encodes the mechanic:
+     magenta = FAKE   cyan = REAL   hazard yellow = SPONSORED
+   ============================================================ */
+:root{
+  --ground:      #12060F;
+  --ground-deep: #0A0309;
+  --surface:     #1E0B1C;
+  --surface-hi:  #2C1129;
+  --line:        #3D1B39;
+
+  --fake:        #FF2E88;
+  --real:        #00E5FF;
+  --sponsor:     #FFE600;
+  --sponsor-ink: #1A1400;
+
+  --ink:         #FFF4FB;
+  --ink-soft:    #B9A3B6;   /* mauve-biased neutral, not grey */
+  --ink-faint:   #6E5A6C;
+
+  --display: "Anton", "Arial Narrow", Impact, sans-serif;
+  --logo:    "Bungee", "Anton", Impact, sans-serif;
+  --ui:      "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono:    "DM Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  --frame-w: 440px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+*{ box-sizing:border-box; }
+
+html,body{ height:100%; }
+body{
+  margin:0;
+  background:var(--ground-deep);
+  color:var(--ink);
+  font-family:var(--ui);
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  /* mobile app feel: no rubber-band, no tap flash, no long-press menu */
+  overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+}
+
+.ambient{
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(60% 45% at 18% 8%,  rgba(255,46,136,.30), transparent 70%),
+    radial-gradient(55% 45% at 84% 88%, rgba(0,229,255,.22), transparent 70%),
+    radial-gradient(70% 50% at 50% 50%, rgba(255,230,0,.05), transparent 75%);
+  animation:drift 24s ease-in-out infinite alternate;
+}
+@keyframes drift{ to{ transform:translate3d(0,-3%,0) scale(1.12); } }
+
+.stage{
+  position:relative; z-index:1;
+  min-height:100vh;
+  min-height:100dvh;              /* survives the mobile URL bar */
+  display:flex; flex-direction:column; align-items:center;
+  gap:14px;
+  padding:calc(16px + var(--safe-t)) 14px calc(20px + var(--safe-b));
+}
+
+/* ---------- the device frame: every screen lives inside it ---------- */
+.frame{
+  position:relative;
+  width:100%; max-width:var(--frame-w);
+  flex:1 1 auto;
+  min-height:560px; max-height:820px;
+  background:linear-gradient(178deg,var(--surface) 0%,var(--ground) 62%);
+  border:1px solid var(--line);
+  border-radius:20px;
+  box-shadow:0 0 0 1px rgba(255,46,136,.10), 0 34px 90px -30px rgba(0,0,0,.95);
+  overflow:hidden;
+  display:flex; flex-direction:column;
+}
+.frame.shake{ animation:shake .34s cubic-bezier(.36,.07,.19,.97); }
+@keyframes shake{
+  10%,90%{transform:translateX(-3px)} 20%,80%{transform:translateX(5px)}
+  30%,50%,70%{transform:translateX(-9px)} 40%,60%{transform:translateX(9px)}
+}
+.frame.sponsored{ border-color:var(--sponsor); box-shadow:0 0 0 1px var(--sponsor),0 0 60px -12px rgba(255,230,0,.45),0 34px 90px -30px #000; }
+
+.screen{ display:none; flex:1; flex-direction:column; min-height:0; }
+.screen.on{ display:flex; }
+
+/* ============================ TITLE ============================ */
+.title-screen{ padding:34px 24px 24px; justify-content:space-between; gap:16px; overflow-y:auto; }
+.wordmark{
+  font-family:var(--logo); font-size:clamp(38px,12vw,56px); line-height:.94;
+  margin:0; text-wrap:balance;
+  background:linear-gradient(96deg,var(--fake) 0%,#FF7AC4 42%,var(--real) 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 3px 0 rgba(0,0,0,.55));
+}
+.tagline{ margin:12px 0 0; max-width:30ch; font-size:15.5px; line-height:1.5; color:var(--ink-soft); }
+.tagline b{ color:var(--ink); font-weight:800; }
+.rule-list{ list-style:none; margin:22px 0 0; padding:0; display:flex; flex-direction:column; gap:9px; }
+.rule-list li{
+  display:flex; align-items:center; gap:12px;
+  font-size:14px; color:var(--ink-soft);
+  padding:11px 13px; border-radius:12px;
+  background:var(--surface-hi); border:1px solid var(--line);
+}
+.swatch{
+  flex:none; width:34px; height:26px; border-radius:7px;
+  display:grid; place-items:center;
+  font-family:var(--display); font-size:11px; color:#0B0209;
+}
+.sw-fake{ background:var(--fake); } .sw-real{ background:var(--real); } .sw-spon{ background:var(--sponsor); }
+.sw-hard{ background:var(--ink); }
+
+.best-line{ margin-top:18px; font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:.04em; }
+.best-line span{ color:var(--sponsor); }
+
+/* ============================ HUD ============================ */
+.hud{ padding:14px 16px 0; display:flex; flex-direction:column; gap:10px; flex:none; }
+.hud-row{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
+.stat-k{
+  font-family:var(--mono); font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-faint); display:block; margin-bottom:2px;
+}
+.stat-v{ font-family:var(--display); font-size:30px; line-height:1; font-variant-numeric:tabular-nums; }
+.combo{ text-align:right; }
+.combo .stat-v{ color:var(--ink-soft); transition:color .18s; display:inline-block; }
+.combo.hot .stat-v{ color:var(--sponsor); }
+.combo.max .stat-v{ color:var(--fake); animation:strobe .5s steps(2) infinite; }
+@keyframes strobe{ 50%{ color:var(--real); } }
+.combo.bump .stat-v{ animation:bump .3s ease-out; }
+@keyframes bump{ 40%{ transform:scale(1.35) rotate(-4deg); } }
+
+.meter{ height:9px; border-radius:99px; background:var(--surface-hi); border:1px solid var(--line); overflow:hidden; }
+.meter-fill{
+  height:100%; width:100%; transform-origin:left center;
+  background:linear-gradient(90deg,var(--fake),var(--sponsor) 55%,var(--real));
+}
+.meter-fill.low{ animation:pulse .55s ease-in-out infinite alternate; }
+@keyframes pulse{ to{ opacity:.35; } }
+
+/* ============================ CARD STACK ============================ */
+.arena{ flex:1 1 auto; position:relative; display:grid; place-items:center; padding:18px 22px; min-height:0; }
+.card{
+  position:absolute; width:100%; max-width:320px; height:min(270px,42vh);
+  border-radius:22px; padding:24px;
+  display:flex; flex-direction:column; justify-content:space-between;
+  background:linear-gradient(160deg,#33143A,#1A0819 70%);
+  border:1px solid var(--line);
+  box-shadow:0 20px 44px -18px #000;
+  touch-action:none; user-select:none; -webkit-user-select:none;
+  will-change:transform;
+}
+.card[data-depth="1"]{ transform:translateY(14px) scale(.94); opacity:.55; }
+.card[data-depth="2"]{ transform:translateY(26px) scale(.88); opacity:.26; }
+.card.top{ cursor:grab; z-index:3; }
+.card.top:active{ cursor:grabbing; }
+.card.gone{ transition:transform .34s cubic-bezier(.4,0,.6,1), opacity .34s; opacity:0; z-index:5; pointer-events:none; }
+
+.card-eyebrow{
+  font-family:var(--mono); font-size:10px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-faint);
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+/* High Rot: the risk/reward spike. Neutral ink rather than a fourth hue,
+   so it reads as "stakes" without colliding with fake/real/sponsored. */
+.card.hard{
+  background:linear-gradient(160deg,#4A2350,#210B21 70%);
+  border-color:var(--ink);
+  box-shadow:0 0 0 1px var(--ink), 0 0 38px -8px rgba(255,244,251,.5), 0 20px 44px -18px #000;
+}
+.card.hard .card-term{ text-shadow:0 0 22px rgba(255,244,251,.45), 2px 3px 0 rgba(0,0,0,.5); }
+.hard-badge{
+  flex:none; background:var(--ink); color:#12060F;
+  font-family:var(--display); font-size:11px; letter-spacing:.06em;
+  padding:4px 9px; border-radius:99px; white-space:nowrap;
+  animation:hardpulse 1.3s ease-in-out infinite alternate;
+}
+@keyframes hardpulse{ from{ opacity:.72; } to{ opacity:1; } }
+.score-pop{
+  position:absolute; left:50%; top:34%; transform:translateX(-50%);
+  font-family:var(--display); font-size:38px; color:var(--ink);
+  text-shadow:0 0 20px rgba(255,244,251,.7); pointer-events:none; z-index:6;
+  animation:pop .75s ease-out forwards;
+}
+@keyframes pop{
+  0%{ opacity:0; transform:translate(-50%,10px) scale(.7); }
+  25%{ opacity:1; transform:translate(-50%,-6px) scale(1.1); }
+  100%{ opacity:0; transform:translate(-50%,-52px) scale(1); }
+}
+.card-term{
+  font-family:var(--display); font-size:clamp(32px,9.5vw,48px); line-height:.98;
+  text-transform:uppercase; text-wrap:balance; margin:0;
+  text-shadow:2px 3px 0 rgba(0,0,0,.5);
+}
+.card-foot{ font-size:12.5px; color:var(--ink-faint); line-height:1.45; }
+
+.stamp{
+  position:absolute; top:22px; padding:6px 12px; border-radius:8px;
+  font-family:var(--display); font-size:20px; letter-spacing:.08em;
+  border:3px solid currentColor; opacity:0; pointer-events:none;
+}
+.stamp-fake{ left:20px; color:var(--fake); transform:rotate(-14deg); }
+.stamp-real{ right:20px; color:var(--real); transform:rotate(14deg); }
+
+/* sponsored variant &#8212; the loudest moment in the game, on purpose */
+.card.ad{
+  background:
+    repeating-linear-gradient(135deg,#FFE600 0 16px,#0A0309 16px 32px) top/100% 12px no-repeat,
+    linear-gradient(160deg,#241D00,#120E00 70%);
+  border-color:var(--sponsor);
+  padding-top:34px;
+}
+.card.ad .card-eyebrow{ color:var(--sponsor); }
+.card.ad .card-term{ color:var(--sponsor); font-size:clamp(26px,7.5vw,38px); }
+.card.ad .card-foot{ color:#C9BE7A; }
+.ad-cta{
+  align-self:flex-start; margin-top:8px;
+  background:var(--sponsor); color:var(--sponsor-ink);
+  font-family:var(--display); font-size:13px; letter-spacing:.06em;
+  padding:8px 15px; border-radius:8px;
+}
+
+/* ============================ CONTROLS ============================ */
+.controls{ padding:0 22px 20px; display:flex; flex-direction:column; gap:11px; flex:none; }
+.btn-row{ display:flex; gap:12px; }
+.btn{
+  flex:1; border:0; cursor:pointer; -webkit-appearance:none;
+  font-family:var(--display); font-size:19px; letter-spacing:.05em;
+  padding:16px 10px; border-radius:14px; min-height:56px;   /* thumb-sized target */
+  color:#0B0209; transition:transform .12s, filter .12s;
+}
+.btn:hover{ filter:brightness(1.12); }
+.btn:active{ transform:translateY(2px) scale(.985); }
+.btn:focus-visible{ outline:3px solid var(--ink); outline-offset:3px; }
+.btn-fake{ background:var(--fake); }
+.btn-real{ background:var(--real); }
+.btn-lg{ flex:none; width:100%; background:linear-gradient(96deg,var(--fake),var(--real)); font-size:22px; padding:18px; }
+.btn-ghost{
+  flex:none; width:100%; background:transparent; border:1px solid var(--line);
+  color:var(--ink-soft); font-family:var(--ui); font-weight:800;
+  font-size:14px; letter-spacing:.04em; padding:13px; border-radius:12px; cursor:pointer;
+}
+.btn-ghost:hover{ color:var(--ink); border-color:var(--ink-faint); }
+.btn-reward{ flex:none; background:var(--sponsor); color:var(--sponsor-ink); width:100%; font-size:17px; padding:16px; }
+.hint{ text-align:center; font-family:var(--mono); font-size:11px; color:var(--ink-faint); margin:0; }
+
+/* ============================ GAME OVER ============================ */
+.over{ padding:26px 24px 20px; justify-content:space-between; gap:16px; overflow-y:auto; }
+.rank{
+  font-family:var(--display); font-size:clamp(28px,8vw,40px); line-height:1;
+  text-transform:uppercase; margin:6px 0 0; text-wrap:balance;
+  background:linear-gradient(94deg,var(--sponsor),var(--fake));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.score-big{ font-family:var(--display); font-size:clamp(56px,18vw,74px); line-height:.9; font-variant-numeric:tabular-nums; margin:12px 0 2px; }
+.over-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+.tile{ background:var(--surface-hi); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+.tile b{ display:block; font-family:var(--display); font-size:22px; font-variant-numeric:tabular-nums; margin-top:3px; }
+.share-out{
+  display:none; margin-top:10px; width:100%;
+  background:var(--ground-deep); border:1px solid var(--line); border-radius:10px;
+  color:var(--ink-soft); font-family:var(--mono); font-size:11.5px;
+  padding:11px; line-height:1.5; resize:none; height:88px;
+}
+
+/* ============================ AD OVERLAY ============================ */
+.overlay{
+  position:absolute; inset:0; z-index:20; display:none;
+  background:var(--ground-deep);
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:15px; padding:28px; text-align:center;
+}
+.overlay.on{ display:flex; }
+.ad-badge{
+  font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--sponsor-ink); background:var(--sponsor); padding:5px 11px; border-radius:99px;
+}
+.ad-brand{ font-family:var(--display); font-size:clamp(28px,8vw,40px); line-height:1; text-transform:uppercase; color:var(--sponsor); text-wrap:balance; }
+.ad-copy{ color:var(--ink-soft); font-size:15px; max-width:30ch; line-height:1.5; margin:0; }
+.ad-timer{ font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:.08em; margin:0; min-height:1em; }
+.ad-ring{ width:100px; height:100px; border-radius:50%; background:conic-gradient(var(--sponsor) var(--p,0%), var(--surface-hi) 0); display:grid; place-items:center; }
+.ad-ring::after{ content:""; width:80px; height:80px; border-radius:50%; background:var(--ground-deep); }
+
+/* ============================ INSTALL PROMPT ============================ */
+.install{
+  display:none; width:100%; max-width:var(--frame-w);
+  align-items:center; gap:12px; padding:12px 14px;
+  background:var(--surface); border:1px solid var(--real); border-radius:14px;
+}
+.install.on{ display:flex; }
+.install p{ margin:0; flex:1; font-size:13px; line-height:1.4; color:var(--ink-soft); }
+.install b{ color:var(--ink); }
+.install button{
+  flex:none; border:0; cursor:pointer; background:var(--real); color:#04212A;
+  font-family:var(--display); font-size:14px; padding:10px 14px; border-radius:10px;
+}
+.install .x{ background:none; color:var(--ink-faint); font-family:var(--ui); font-size:20px; padding:4px 8px; }
+
+/* ============================ METRICS DRAWER ============================ */
+.metrics{ width:100%; max-width:var(--frame-w); background:var(--surface); border:1px solid var(--line); border-radius:16px; overflow:hidden; flex:none; }
+.metrics-head{
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background:none; border:0; cursor:pointer; padding:14px 16px; text-align:left;
+  font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft);
+}
+.metrics-head:hover{ color:var(--ink); }
+.metrics-head:focus-visible{ outline:2px solid var(--real); outline-offset:-2px; }
+.chev{ transition:transform .2s; color:var(--ink-faint); }
+.metrics.open .chev{ transform:rotate(180deg); }
+.metrics-body{ display:none; padding:0 16px 18px; }
+.metrics.open .metrics-body{ display:block; }
+.m-note{ font-size:12.5px; color:var(--ink-soft); line-height:1.55; margin:0 0 14px; }
+.m-table{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px; }
+.m-table th{
+  text-align:left; font-weight:400; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-faint); padding:0 0 7px; border-bottom:1px solid var(--line);
+}
+.m-table td{ padding:8px 0; border-bottom:1px solid var(--line); color:var(--ink-soft); }
+.m-table td:last-child, .m-table th:last-child{ text-align:right; color:var(--ink); font-variant-numeric:tabular-nums; }
+.m-table tr.hi td:last-child{ color:var(--sponsor); }
+.proj{ margin-top:14px; padding:13px; border-radius:12px; background:var(--ground-deep); border:1px solid var(--sponsor); }
+.proj-k{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+.proj-v{ font-family:var(--display); font-size:34px; color:var(--sponsor); font-variant-numeric:tabular-nums; line-height:1.1; }
+.proj-note{ font-size:11.5px; color:var(--ink-faint); line-height:1.5; margin:6px 0 0; }
+.ad-status{ margin-top:10px; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); letter-spacing:.04em; }
+
+.colophon{ max-width:var(--frame-w); width:100%; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); line-height:1.6; text-align:center; flex:none; }
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+}
+/* short phones: drop the drawer chrome so the game always fits */
+@media (max-height:700px){
+  .metrics,.colophon{ display:none; }
+  .frame{ min-height:0; }
+}
+</style>
+<script>window.__DECK = {
+"version":2,
+"updated":"2026-09-01",
+"terms":[
+{
+"t":"skibidi",
+"r":true,
+"k":false,
+"n":"From the Skibidi Toilet series. Means roughly nothing, deployed constantly."
+},
+{
+"t":"rizz",
+"r":true,
+"k":false,
+"n":"Charisma, the flirting kind."
+},
+{
+"t":"gyatt",
+"r":true,
+"k":false,
+"n":"An exclamation of shock. Streamer-born, now everywhere."
+},
+{
+"t":"fanum tax",
+"r":true,
+"k":false,
+"n":"Taxing a friend's food. Named after a streamer's habit."
+},
+{
+"t":"sigma",
+"r":true,
+"k":false,
+"n":"The lone-wolf archetype. Almost always ironic now."
+},
+{
+"t":"mewing",
+"r":true,
+"k":false,
+"n":"Tongue-to-palate jaw posture. A whole subculture."
+},
+{
+"t":"mogging",
+"r":true,
+"k":false,
+"n":"Out-attractive-ing someone just by standing near them."
+},
+{
+"t":"looksmaxxing",
+"r":true,
+"k":false,
+"n":"Optimising your appearance with unsettling intensity."
+},
+{
+"t":"delulu",
+"r":true,
+"k":false,
+"n":"Delusional, affectionately."
+},
+{
+"t":"aura",
+"r":true,
+"k":false,
+"n":"Coolness as a stat."
+},
+{
+"t":"aura points",
+"r":true,
+"k":true,
+"n":"An imaginary scoreboard for how cool an action was."
+},
+{
+"t":"aura farming",
+"r":true,
+"k":true,
+"n":"Doing things purely to look cool."
+},
+{
+"t":"negative aura",
+"r":true,
+"k":true,
+"n":"The opposite. Losing points for being cringe."
+},
+{
+"t":"crashing out",
+"r":true,
+"k":false,
+"n":"Losing it emotionally, publicly, on purpose."
+},
+{
+"t":"crashout",
+"r":true,
+"k":false,
+"n":"Same thing, as a noun."
+},
+{
+"t":"glazing",
+"r":true,
+"k":false,
+"n":"Praising someone way past the point of dignity."
+},
+{
+"t":"cooked",
+"r":true,
+"k":false,
+"n":"Finished. Doomed. No recovery available."
+},
+{
+"t":"chopped",
+"r":true,
+"k":false,
+"n":"Unattractive, or badly beaten at something."
+},
+{
+"t":"yapping",
+"r":true,
+"k":false,
+"n":"Talking far too much."
+},
+{
+"t":"yap session",
+"r":true,
+"k":true,
+"n":"A long stretch of talking far too much."
+},
+{
+"t":"NPC",
+"r":true,
+"k":false,
+"n":"Someone on autopilot with stock dialogue."
+},
+{
+"t":"touch grass",
+"r":true,
+"k":false,
+"n":"Go outside. You have been extremely online."
+},
+{
+"t":"ratio",
+"r":true,
+"k":false,
+"n":"Your reply outperformed the post. Devastating."
+},
+{
+"t":"it's giving",
+"r":true,
+"k":true,
+"n":"It evokes. It resembles. Ballroom slang gone global."
+},
+{
+"t":"bussin",
+"r":true,
+"k":false,
+"n":"Genuinely delicious."
+},
+{
+"t":"clanker",
+"r":true,
+"k":true,
+"n":"A robot, said with disdain."
+},
+{
+"t":"six seven",
+"r":true,
+"k":true,
+"n":"Say it with the hand gesture. Nobody knows why."
+},
+{
+"t":"huzz",
+"r":true,
+"k":true,
+"n":"Girls, plural. Don't ask about the etymology."
+},
+{
+"t":"bruzz",
+"r":true,
+"k":true,
+"n":"The bros. Same pattern."
+},
+{
+"t":"opps",
+"r":true,
+"k":true,
+"n":"Your enemies."
+},
+{
+"t":"lock in",
+"r":true,
+"k":true,
+"n":"Focus completely."
+},
+{
+"t":"locked in",
+"r":true,
+"k":false,
+"n":"Fully focused. Nothing else exists."
+},
+{
+"t":"twin",
+"r":true,
+"k":true,
+"n":"Close friend. 'Twin, what happened?'"
+},
+{
+"t":"gng",
+"r":true,
+"k":true,
+"n":"Gang, as a form of address."
+},
+{
+"t":"blud",
+"r":true,
+"k":true,
+"n":"Bro, UK edition."
+},
+{
+"t":"cuh",
+"r":true,
+"k":true,
+"n":"Bro, Southern edition."
+},
+{
+"t":"unc",
+"r":true,
+"k":true,
+"n":"Anyone over 25. Short for uncle."
+},
+{
+"t":"unc status",
+"r":true,
+"k":true,
+"n":"Officially old."
+},
+{
+"t":"big back",
+"r":true,
+"k":true,
+"n":"Someone who eats a lot. Said with love, usually."
+},
+{
+"t":"tuff",
+"r":true,
+"k":true,
+"n":"Cool. 'That's tuff.'"
+},
+{
+"t":"fye",
+"r":true,
+"k":true,
+"n":"Fire. Extremely good."
+},
+{
+"t":"icl",
+"r":true,
+"k":true,
+"n":"I can't lie."
+},
+{
+"t":"ong",
+"r":true,
+"k":false,
+"n":"On God."
+},
+{
+"t":"fr",
+"r":true,
+"k":false,
+"n":"For real."
+},
+{
+"t":"frfr",
+"r":true,
+"k":false,
+"n":"For real for real."
+},
+{
+"t":"deadass",
+"r":true,
+"k":false,
+"n":"Seriously."
+},
+{
+"t":"no cap",
+"r":true,
+"k":false,
+"n":"No lie."
+},
+{
+"t":"cap",
+"r":true,
+"k":false,
+"n":"A lie."
+},
+{
+"t":"capping",
+"r":true,
+"k":false,
+"n":"Lying."
+},
+{
+"t":"bet",
+"r":true,
+"k":false,
+"n":"Okay. Deal."
+},
+{
+"t":"say less",
+"r":true,
+"k":false,
+"n":"Understood, no need to continue."
+},
+{
+"t":"lowkey",
+"r":true,
+"k":false,
+"n":"Slightly, or secretly."
+},
+{
+"t":"highkey",
+"r":true,
+"k":false,
+"n":"Very, or openly."
+},
+{
+"t":"mid",
+"r":true,
+"k":false,
+"n":"Aggressively average. The cruellest rating."
+},
+{
+"t":"bum",
+"r":true,
+"k":false,
+"n":"A loser."
+},
+{
+"t":"bummy",
+"r":true,
+"k":true,
+"n":"Looking like a bum."
+},
+{
+"t":"goofy ahh",
+"r":true,
+"k":true,
+"n":"Silly-looking. 'Goofy ahh haircut.'"
+},
+{
+"t":"ahh",
+"r":true,
+"k":true,
+"n":"A suffix. Censored, but everyone knows."
+},
+{
+"t":"ohio",
+"r":true,
+"k":false,
+"n":"Anywhere weird."
+},
+{
+"t":"only in ohio",
+"r":true,
+"k":false,
+"n":"Where the cursed things happen."
+},
+{
+"t":"ohio final boss",
+"r":true,
+"k":true,
+"n":"The weirdest possible thing in Ohio."
+},
+{
+"t":"final boss",
+"r":true,
+"k":false,
+"n":"The ultimate version of something."
+},
+{
+"t":"rizzler",
+"r":true,
+"k":false,
+"n":"Someone with rizz."
+},
+{
+"t":"skibidi rizz",
+"r":true,
+"k":true,
+"n":"Compound nonsense. Real usage though."
+},
+{
+"t":"sussy",
+"r":true,
+"k":false,
+"n":"Suspicious. Among Us era."
+},
+{
+"t":"sus",
+"r":true,
+"k":false,
+"n":"Suspicious."
+},
+{
+"t":"baka",
+"r":true,
+"k":true,
+"n":"Idiot, borrowed from anime."
+},
+{
+"t":"amogus",
+"r":true,
+"k":true,
+"n":"Among Us, mutated by memes."
+},
+{
+"t":"skill issue",
+"r":true,
+"k":false,
+"n":"Your fault. Get better."
+},
+{
+"t":"git gud",
+"r":true,
+"k":true,
+"n":"Get good."
+},
+{
+"t":"GG",
+"r":true,
+"k":false,
+"n":"Good game."
+},
+{
+"t":"ez",
+"r":true,
+"k":false,
+"n":"Easy. Said specifically to annoy."
+},
+{
+"t":"took the L",
+"r":true,
+"k":false,
+"n":"Accepted the loss."
+},
+{
+"t":"L + ratio",
+"r":true,
+"k":true,
+"n":"The full dismissal combo."
+},
+{
+"t":"bozo",
+"r":true,
+"k":false,
+"n":"A clown."
+},
+{
+"t":"cringe",
+"r":true,
+"k":false,
+"n":"Embarrassing."
+},
+{
+"t":"based",
+"r":true,
+"k":false,
+"n":"Unapologetically yourself."
+},
+{
+"t":"cope",
+"r":true,
+"k":false,
+"n":"Denial with extra steps."
+},
+{
+"t":"seethe",
+"r":true,
+"k":true,
+"n":"Be angry, impotently."
+},
+{
+"t":"mald",
+"r":true,
+"k":true,
+"n":"Mad plus bald. Rage so intense you lose hair."
+},
+{
+"t":"salty",
+"r":true,
+"k":false,
+"n":"Bitter about a loss."
+},
+{
+"t":"pressed",
+"r":true,
+"k":false,
+"n":"Upset."
+},
+{
+"t":"triggered",
+"r":true,
+"k":false,
+"n":"Upset, said ironically."
+},
+{
+"t":"let him cook",
+"r":true,
+"k":true,
+"n":"Stand back. He might be onto something."
+},
+{
+"t":"he cooked",
+"r":true,
+"k":false,
+"n":"He did great."
+},
+{
+"t":"cooking",
+"r":true,
+"k":false,
+"n":"Doing great, in progress."
+},
+{
+"t":"ate",
+"r":true,
+"k":false,
+"n":"Did amazingly."
+},
+{
+"t":"ate and left no crumbs",
+"r":true,
+"k":false,
+"n":"Did amazingly, completely."
+},
+{
+"t":"served",
+"r":true,
+"k":false,
+"n":"Delivered a look or a performance."
+},
+{
+"t":"slay",
+"r":true,
+"k":false,
+"n":"Do amazingly."
+},
+{
+"t":"mother",
+"r":true,
+"k":true,
+"n":"An iconic woman."
+},
+{
+"t":"mother is mothering",
+"r":true,
+"k":true,
+"n":"Peak iconic."
+},
+{
+"t":"iconic",
+"r":true,
+"k":false,
+"n":"Memorable. Legendary."
+},
+{
+"t":"understood the assignment",
+"r":true,
+"k":false,
+"n":"Did exactly what was needed."
+},
+{
+"t":"main character",
+"r":true,
+"k":false,
+"n":"The protagonist."
+},
+{
+"t":"main character energy",
+"r":true,
+"k":false,
+"n":"Acting like the protagonist."
+},
+{
+"t":"villain era",
+"r":true,
+"k":false,
+"n":"A phase of not being nice."
+},
+{
+"t":"era",
+"r":true,
+"k":false,
+"n":"A phase."
+},
+{
+"t":"flop",
+"r":true,
+"k":false,
+"n":"A failure."
+},
+{
+"t":"flop era",
+"r":true,
+"k":true,
+"n":"A phase of failing."
+},
+{
+"t":"rent free",
+"r":true,
+"k":false,
+"n":"Occupying your thoughts, uninvited."
+},
+{
+"t":"vibe check",
+"r":true,
+"k":false,
+"n":"An assessment of the mood."
+},
+{
+"t":"vibing",
+"r":true,
+"k":false,
+"n":"Enjoying the moment."
+},
+{
+"t":"simp",
+"r":true,
+"k":false,
+"n":"Someone excessively devoted to a crush."
+},
+{
+"t":"stan",
+"r":true,
+"k":false,
+"n":"An intense fan."
+},
+{
+"t":"the ick",
+"r":true,
+"k":false,
+"n":"A sudden, permanent turn-off."
+},
+{
+"t":"beige flag",
+"r":true,
+"k":true,
+"n":"A boring but harmless trait."
+},
+{
+"t":"red flag",
+"r":true,
+"k":false,
+"n":"A warning sign."
+},
+{
+"t":"green flag",
+"r":true,
+"k":false,
+"n":"A good sign."
+},
+{
+"t":"ghosting",
+"r":true,
+"k":false,
+"n":"Vanishing from a conversation."
+},
+{
+"t":"breadcrumbing",
+"r":true,
+"k":true,
+"n":"Giving minimal attention to keep someone hooked."
+},
+{
+"t":"situationship",
+"r":true,
+"k":false,
+"n":"A relationship without a label."
+},
+{
+"t":"talking stage",
+"r":true,
+"k":false,
+"n":"The pre-dating phase."
+},
+{
+"t":"soft launch",
+"r":true,
+"k":true,
+"n":"Hinting at a relationship on social media."
+},
+{
+"t":"hard launch",
+"r":true,
+"k":true,
+"n":"Officially revealing a relationship."
+},
+{
+"t":"roster",
+"r":true,
+"k":true,
+"n":"The people you're talking to."
+},
+{
+"t":"down bad",
+"r":true,
+"k":false,
+"n":"Desperately infatuated."
+},
+{
+"t":"down horrendous",
+"r":true,
+"k":true,
+"n":"Even more so."
+},
+{
+"t":"feral",
+"r":true,
+"k":false,
+"n":"Wild. Unhinged."
+},
+{
+"t":"unhinged",
+"r":true,
+"k":false,
+"n":"Chaotic."
+},
+{
+"t":"chronically online",
+"r":true,
+"k":false,
+"n":"Too much internet."
+},
+{
+"t":"terminally online",
+"r":true,
+"k":true,
+"n":"Even more internet."
+},
+{
+"t":"brainrot",
+"r":true,
+"k":false,
+"n":"What this game is about."
+},
+{
+"t":"doomscrolling",
+"r":true,
+"k":false,
+"n":"Endless bad-news scrolling."
+},
+{
+"t":"bed rotting",
+"r":true,
+"k":true,
+"n":"Lying in bed all day, on purpose."
+},
+{
+"t":"goblin mode",
+"r":true,
+"k":false,
+"n":"Unapologetically slobby."
+},
+{
+"t":"gremlin",
+"r":true,
+"k":false,
+"n":"Chaotic little creature energy."
+},
+{
+"t":"lore",
+"r":true,
+"k":false,
+"n":"Backstory."
+},
+{
+"t":"lore drop",
+"r":true,
+"k":false,
+"n":"Backstory, revealed."
+},
+{
+"t":"canon event",
+"r":true,
+"k":true,
+"n":"An unavoidable, formative moment."
+},
+{
+"t":"filler arc",
+"r":true,
+"k":true,
+"n":"A stretch of life that doesn't advance the plot."
+},
+{
+"t":"core memory",
+"r":true,
+"k":false,
+"n":"A defining memory."
+},
+{
+"t":"cottagecore",
+"r":true,
+"k":true,
+"n":"The aesthetic suffix, in its original habitat."
+},
+{
+"t":"coquette",
+"r":true,
+"k":true,
+"n":"Bows, lace, ribbons."
+},
+{
+"t":"clean girl",
+"r":true,
+"k":true,
+"n":"Minimal makeup, slicked-back bun."
+},
+{
+"t":"demure",
+"r":true,
+"k":true,
+"n":"Modest. 'Very demure, very mindful.'"
+},
+{
+"t":"very demure very mindful",
+"r":true,
+"k":true,
+"n":"The full phrase."
+},
+{
+"t":"brat summer",
+"r":true,
+"k":true,
+"n":"Summer 2024, specifically."
+},
+{
+"t":"girl dinner",
+"r":true,
+"k":true,
+"n":"A snack plate as a meal."
+},
+{
+"t":"girl math",
+"r":true,
+"k":true,
+"n":"Justifying purchases creatively."
+},
+{
+"t":"boy math",
+"r":true,
+"k":true,
+"n":"The same, aimed back."
+},
+{
+"t":"roman empire",
+"r":true,
+"k":true,
+"n":"The thing you think about constantly."
+},
+{
+"t":"hot girl summer",
+"r":true,
+"k":false,
+"n":"A summer of confidence."
+},
+{
+"t":"delulu is the solulu",
+"r":true,
+"k":true,
+"n":"Delusion is the solution."
+},
+{
+"t":"manifesting",
+"r":true,
+"k":false,
+"n":"Willing something into existence."
+},
+{
+"t":"periodt",
+"r":true,
+"k":false,
+"n":"Period, with emphasis."
+},
+{
+"t":"tea",
+"r":true,
+"k":false,
+"n":"Gossip."
+},
+{
+"t":"spill the tea",
+"r":true,
+"k":false,
+"n":"Share the gossip."
+},
+{
+"t":"shade",
+"r":true,
+"k":false,
+"n":"A subtle insult."
+},
+{
+"t":"receipts",
+"r":true,
+"k":false,
+"n":"Evidence."
+},
+{
+"t":"snatched",
+"r":true,
+"k":false,
+"n":"Looking great."
+},
+{
+"t":"slaps",
+"r":true,
+"k":false,
+"n":"Is excellent, of music."
+},
+{
+"t":"banger",
+"r":true,
+"k":false,
+"n":"An excellent song."
+},
+{
+"t":"hits different",
+"r":true,
+"k":false,
+"n":"Feels uniquely good."
+},
+{
+"t":"fire",
+"r":true,
+"k":false,
+"n":"Excellent."
+},
+{
+"t":"lit",
+"r":true,
+"k":false,
+"n":"Exciting."
+},
+{
+"t":"GOAT",
+"r":true,
+"k":false,
+"n":"Greatest of all time."
+},
+{
+"t":"goated",
+"r":true,
+"k":false,
+"n":"Being the greatest."
+},
+{
+"t":"bruh",
+"r":true,
+"k":false,
+"n":"Disbelief."
+},
+{
+"t":"bruh moment",
+"r":true,
+"k":false,
+"n":"A moment of disbelief."
+},
+{
+"t":"I'm dead",
+"r":true,
+"k":false,
+"n":"That's hilarious."
+},
+{
+"t":"screaming",
+"r":true,
+"k":false,
+"n":"That's hilarious."
+},
+{
+"t":"sending me",
+"r":true,
+"k":true,
+"n":"Making me laugh uncontrollably."
+},
+{
+"t":"not me",
+"r":true,
+"k":true,
+"n":"A self-aware confession. 'Not me crying.'"
+},
+{
+"t":"it's the ___ for me",
+"r":true,
+"k":true,
+"n":"Pointing out the notable detail."
+},
+{
+"t":"bestie",
+"r":true,
+"k":false,
+"n":"Friend. Or stranger. Affectionately."
+},
+{
+"t":"valid",
+"r":true,
+"k":false,
+"n":"Acceptable."
+},
+{
+"t":"so real",
+"r":true,
+"k":true,
+"n":"Extremely relatable."
+},
+{
+"t":"you're so real for that",
+"r":true,
+"k":true,
+"n":"That was relatable."
+},
+{
+"t":"so true bestie",
+"r":true,
+"k":true,
+"n":"Ironic agreement."
+},
+{
+"t":"didn't ask",
+"r":true,
+"k":false,
+"n":"Dismissal."
+},
+{
+"t":"who asked",
+"r":true,
+"k":false,
+"n":"Dismissal."
+},
+{
+"t":"big yikes",
+"r":true,
+"k":false,
+"n":"Very awkward."
+},
+{
+"t":"oof",
+"r":true,
+"k":false,
+"n":"Ouch."
+},
+{
+"t":"and I oop",
+"r":true,
+"k":true,
+"n":"Caught off guard."
+},
+{
+"t":"sksksk",
+"r":true,
+"k":true,
+"n":"VSCO girl laughter."
+},
+{
+"t":"VSCO girl",
+"r":true,
+"k":true,
+"n":"Scrunchies, Hydro Flasks, 2019."
+},
+{
+"t":"e-girl",
+"r":true,
+"k":false,
+"n":"Alt internet girl aesthetic."
+},
+{
+"t":"e-boy",
+"r":true,
+"k":false,
+"n":"Alt internet boy aesthetic."
+},
+{
+"t":"bombastic side eye",
+"r":true,
+"k":true,
+"n":"A dramatic look of judgement."
+},
+{
+"t":"criminal offensive side eye",
+"r":true,
+"k":true,
+"n":"The full meme."
+},
+{
+"t":"side eye",
+"r":true,
+"k":false,
+"n":"A look of judgement."
+},
+{
+"t":"gagged",
+"r":true,
+"k":true,
+"n":"Shocked. Impressed."
+},
+{
+"t":"menace",
+"r":true,
+"k":false,
+"n":"A chaotic person."
+},
+{
+"t":"menace to society",
+"r":true,
+"k":false,
+"n":"A very chaotic person."
+},
+{
+"t":"ship",
+"r":true,
+"k":false,
+"n":"Want two people to be together."
+},
+{
+"t":"OTP",
+"r":true,
+"k":true,
+"n":"One true pairing."
+},
+{
+"t":"headcanon",
+"r":true,
+"k":true,
+"n":"A personal fan theory."
+},
+{
+"t":"cat behavior",
+"r":true,
+"k":true,
+"n":"Acting like a cat."
+},
+{
+"t":"he's him",
+"r":true,
+"k":true,
+"n":"He's the real deal."
+},
+{
+"t":"she's her",
+"r":true,
+"k":true,
+"n":"She's the real deal."
+},
+{
+"t":"tweaking",
+"r":true,
+"k":true,
+"n":"Acting irrationally."
+},
+{
+"t":"bro is tweaking",
+"r":true,
+"k":true,
+"n":"He's acting irrationally."
+},
+{
+"t":"the audacity",
+"r":true,
+"k":false,
+"n":"The nerve."
+},
+{
+"t":"gaslight gatekeep girlboss",
+"r":true,
+"k":true,
+"n":"The ironic feminine villainy triad."
+},
+{
+"t":"gatekeep",
+"r":true,
+"k":false,
+"n":"Withhold the good stuff."
+},
+{
+"t":"girlboss",
+"r":true,
+"k":false,
+"n":"Ambitious woman, ironically."
+},
+{
+"t":"chad",
+"r":true,
+"k":false,
+"n":"A confident, dominant man."
+},
+{
+"t":"gigachad",
+"r":true,
+"k":false,
+"n":"Extremely so."
+},
+{
+"t":"grindset",
+"r":true,
+"k":false,
+"n":"Hustle mindset."
+},
+{
+"t":"sigma grindset",
+"r":true,
+"k":true,
+"n":"Hustle mindset, ironic."
+},
+{
+"t":"what the sigma",
+"r":true,
+"k":true,
+"n":"What the heck, brainrot edition."
+},
+{
+"t":"alpha",
+"r":true,
+"k":false,
+"n":"The dominant type."
+},
+{
+"t":"beta",
+"r":true,
+"k":false,
+"n":"The submissive type."
+},
+{
+"t":"npc streamer",
+"r":true,
+"k":true,
+"n":"Streamers who react to gifts with stock phrases."
+},
+{
+"t":"ice cream so good",
+"r":true,
+"k":true,
+"n":"The NPC streamer's catchphrase."
+},
+{
+"t":"gang gang",
+"r":true,
+"k":true,
+"n":"Another NPC streamer catchphrase."
+},
+{
+"t":"erm",
+"r":true,
+"k":true,
+"n":"Um, but condescending."
+},
+{
+"t":"what the flip",
+"r":true,
+"k":true,
+"n":"What the heck, censored."
+},
+{
+"t":"bing chilling",
+"r":true,
+"k":true,
+"n":"John Cena, Chinese, ice cream."
+},
+{
+"t":"glizzy",
+"r":true,
+"k":true,
+"n":"A hot dog."
+},
+{
+"t":"smellmaxxing",
+"r":true,
+"k":true,
+"n":"Teens buying far too much cologne."
+},
+{
+"t":"heightmaxxing",
+"r":true,
+"k":true,
+"n":"Trying to get taller."
+},
+{
+"t":"gymmaxxing",
+"r":true,
+"k":true,
+"n":"Trying to get jacked."
+},
+{
+"t":"mog",
+"r":true,
+"k":false,
+"n":"To outshine someone."
+},
+{
+"t":"mogged",
+"r":true,
+"k":false,
+"n":"Outshone."
+},
+{
+"t":"finna",
+"r":true,
+"k":false,
+"n":"Going to."
+},
+{
+"t":"boutta",
+"r":true,
+"k":false,
+"n":"About to."
+},
+{
+"t":"ghosted",
+"r":true,
+"k":false,
+"n":"Got ghosted."
+},
+{
+"t":"left on read",
+"r":true,
+"k":false,
+"n":"Message seen. Not answered."
+},
+{
+"t":"dry texter",
+"r":true,
+"k":false,
+"n":"A boring texter."
+},
+{
+"t":"curve",
+"r":true,
+"k":true,
+"n":"Reject someone."
+},
+{
+"t":"cuffing season",
+"r":true,
+"k":false,
+"n":"Winter coupling season."
+},
+{
+"t":"bae",
+"r":true,
+"k":false,
+"n":"Partner."
+},
+{
+"t":"thirst trap",
+"r":true,
+"k":false,
+"n":"A post designed for attention."
+},
+{
+"t":"flex",
+"r":true,
+"k":false,
+"n":"Show off."
+},
+{
+"t":"weird flex but ok",
+"r":true,
+"k":false,
+"n":"Odd thing to brag about."
+},
+{
+"t":"big mood",
+"r":true,
+"k":false,
+"n":"Very relatable."
+},
+{
+"t":"mood",
+"r":true,
+"k":false,
+"n":"Relatable."
+},
+{
+"t":"snack",
+"r":true,
+"k":false,
+"n":"An attractive person."
+},
+{
+"t":"wig",
+"r":true,
+"k":true,
+"n":"So good the wig flew off."
+},
+{
+"t":"shook",
+"r":true,
+"k":false,
+"n":"Shocked."
+},
+{
+"t":"extra",
+"r":true,
+"k":false,
+"n":"Over the top."
+},
+{
+"t":"basic",
+"r":true,
+"k":false,
+"n":"Unoriginal."
+},
+{
+"t":"boujee",
+"r":true,
+"k":false,
+"n":"Fancy."
+},
+{
+"t":"yeet",
+"r":true,
+"k":false,
+"n":"Throw. Or just shout."
+},
+{
+"t":"fam",
+"r":true,
+"k":false,
+"n":"Family. Friends."
+},
+{
+"t":"savage",
+"r":true,
+"k":false,
+"n":"Brutally honest."
+},
+{
+"t":"ok boomer",
+"r":true,
+"k":false,
+"n":"Dismissing the old."
+},
+{
+"t":"zoomer",
+"r":true,
+"k":false,
+"n":"A Gen Z person."
+},
+{
+"t":"ipad kid",
+"r":true,
+"k":true,
+"n":"A child raised by a tablet."
+},
+{
+"t":"sephora kid",
+"r":true,
+"k":true,
+"n":"A ten-year-old buying retinol."
+},
+{
+"t":"skibidi toilet",
+"r":true,
+"k":false,
+"n":"The original brainrot series."
+},
+{
+"t":"camera man",
+"r":true,
+"k":true,
+"n":"The Skibidi Toilet protagonist faction."
+},
+{
+"t":"speaker man",
+"r":true,
+"k":true,
+"n":"Camera man's colleague."
+},
+{
+"t":"tv man",
+"r":true,
+"k":true,
+"n":"The upgrade."
+},
+{
+"t":"noob",
+"r":true,
+"k":false,
+"n":"A beginner."
+},
+{
+"t":"op",
+"r":true,
+"k":false,
+"n":"Overpowered."
+},
+{
+"t":"nerf",
+"r":true,
+"k":false,
+"n":"Weaken."
+},
+{
+"t":"buff",
+"r":true,
+"k":false,
+"n":"Strengthen."
+},
+{
+"t":"clown",
+"r":true,
+"k":false,
+"n":"A fool. \u1f921"
+},
+{
+"t":"cornball",
+"r":true,
+"k":true,
+"n":"An embarrassing person."
+},
+{
+"t":"corny",
+"r":true,
+"k":false,
+"n":"Cheesy."
+},
+{
+"t":"opp",
+"r":true,
+"k":true,
+"n":"An enemy."
+},
+{
+"t":"that's crazy",
+"r":true,
+"k":false,
+"n":"Dismissive acknowledgement."
+},
+{
+"t":"wild",
+"r":true,
+"k":false,
+"n":"Surprising."
+},
+{
+"t":"goes hard",
+"r":true,
+"k":false,
+"n":"Is excellent."
+},
+{
+"t":"goes crazy",
+"r":true,
+"k":false,
+"n":"Is excellent."
+},
+{
+"t":"certified banger",
+"r":true,
+"k":false,
+"n":"Definitely excellent."
+},
+{
+"t":"hood classic",
+"r":true,
+"k":true,
+"n":"A beloved song."
+},
+{
+"t":"AI slop",
+"r":true,
+"k":true,
+"n":"Low-effort AI content."
+},
+{
+"t":"slop",
+"r":true,
+"k":true,
+"n":"Low-effort content."
+},
+{
+"t":"giving",
+"r":true,
+"k":true,
+"n":"Evoking. 'It's giving 2016.'"
+},
+{
+"t":"lore accurate",
+"r":true,
+"k":true,
+"n":"True to the backstory."
+},
+{
+"t":"nah he tweakin",
+"r":true,
+"k":true,
+"n":"He's lost it."
+},
+{
+"t":"bro thinks he's",
+"r":true,
+"k":true,
+"n":"Bro thinks he's the main character."
+},
+{
+"t":"the way",
+"r":true,
+"k":true,
+"n":"Emphasising something. 'The way I ran.'"
+},
+{
+"t":"purr",
+"r":true,
+"k":true,
+"n":"Period, with more attitude."
+},
+{
+"t":"mother of",
+"r":true,
+"k":true,
+"n":"Prefix for an icon. 'Mother of pop.'"
+},
+{
+"t":"hard",
+"r":true,
+"k":true,
+"n":"Cool. 'That's hard.'"
+},
+{
+"t":"tralalero tralala",
+"r":true,
+"k":false,
+"n":"A shark in Nikes. Yes, really."
+},
+{
+"t":"bombardiro crocodilo",
+"r":true,
+"k":false,
+"n":"Crocodile-bomber hybrid."
+},
+{
+"t":"tung tung tung sahur",
+"r":true,
+"k":true,
+"n":"An Indonesian Ramadan wake-up drum, alive."
+},
+{
+"t":"ballerina cappuccina",
+"r":true,
+"k":false,
+"n":"Ballerina, cappuccino for a head."
+},
+{
+"t":"brr brr patapim",
+"r":true,
+"k":true,
+"n":"Tree-legged proboscis creature."
+},
+{
+"t":"chimpanzini bananini",
+"r":true,
+"k":true,
+"n":"Chimp in a banana."
+},
+{
+"t":"lirili larila",
+"r":true,
+"k":true,
+"n":"Cactus elephant in sandals."
+},
+{
+"t":"cappuccino assassino",
+"r":true,
+"k":true,
+"n":"Assassin coffee cup."
+},
+{
+"t":"boneca ambalabu",
+"r":true,
+"k":true,
+"n":"Frog with a tyre for a body."
+},
+{
+"t":"trippi troppi",
+"r":true,
+"k":true,
+"n":"Shrimp-cat thing."
+},
+{
+"t":"bombombini gusini",
+"r":true,
+"k":true,
+"n":"Bomber goose. Bombardiro's cousin."
+},
+{
+"t":"frigo camelo",
+"r":true,
+"k":true,
+"n":"Camel with a fridge for a body."
+},
+{
+"t":"glorbo fruttodrillo",
+"r":true,
+"k":true,
+"n":"Watermelon crocodile."
+},
+{
+"t":"burbaloni luliloli",
+"r":true,
+"k":true,
+"n":"Coconut capybara."
+},
+{
+"t":"la vaca saturno saturnita",
+"r":true,
+"k":true,
+"n":"A cow with Saturn for a body."
+},
+{
+"t":"orangutini ananassini",
+"r":true,
+"k":true,
+"n":"Pineapple orangutan."
+},
+{
+"t":"trulimero trulicina",
+"r":true,
+"k":true,
+"n":"Fish-headed cat."
+},
+{
+"t":"girafa celestre",
+"r":true,
+"k":true,
+"n":"Celestial giraffe."
+},
+{
+"t":"bobrito bandito",
+"r":true,
+"k":true,
+"n":"Bandit beaver."
+},
+{
+"t":"talpa di fero",
+"r":true,
+"k":true,
+"n":"Iron mole."
+},
+{
+"t":"espressona signora",
+"r":true,
+"k":true,
+"n":"Espresso lady."
+},
+{
+"t":"rhino toasterino",
+"r":true,
+"k":true,
+"n":"Rhino toaster."
+},
+{
+"t":"cocofanto elefanto",
+"r":true,
+"k":true,
+"n":"Coconut elephant."
+},
+{
+"t":"piccione macchina",
+"r":true,
+"k":true,
+"n":"Pigeon car."
+},
+{
+"t":"chef crabracadabra",
+"r":true,
+"k":true,
+"n":"Crab chef."
+},
+{
+"t":"grimzo",
+"r":false,
+"k":false,
+"n":"Invented. Sounds plausible, means nothing."
+},
+{
+"t":"snorpling",
+"r":false,
+"k":false,
+"n":"Invented. Not a thing. Never was."
+},
+{
+"t":"flonkered",
+"r":false,
+"k":false,
+"n":"Invented. Sounds like something. It is not."
+},
+{
+"t":"drimpy",
+"r":false,
+"k":false,
+"n":"Invented. Zero usage anywhere."
+},
+{
+"t":"zorpo",
+"r":false,
+"k":false,
+"n":"Invented. No lore, no meme, no nothing."
+},
+{
+"t":"skrimblo",
+"r":false,
+"k":false,
+"n":"Invented. Pure nonsense, correctly identified."
+},
+{
+"t":"blorpo",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"glimbo",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"smorp",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"florp",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"quimble",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"dringle",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"crumbo",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"blungus",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"drongus",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"sporgle",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"twizzled",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"frumple",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"grumbo",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"snizzle",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"plorb",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"zimbo",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"krimble",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"vronk",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"shlorp",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"gronkled",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"skronked",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"yorped",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"nurp",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"flerp",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"glooped",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"drungle",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"plonkers only",
+"r":false,
+"k":false,
+"n":"Invented. Not a thing."
+},
+{
+"t":"yeetus deluxe",
+"r":false,
+"k":false,
+"n":"Invented. Yeet is real; the deluxe edition is not."
+},
+{
+"t":"vibecrashing",
+"r":false,
+"k":false,
+"n":"Invented. You were pattern-matching, weren't you."
+},
+{
+"t":"crumbmaxxing",
+"r":false,
+"k":true,
+"n":"Invented. -maxxing is real, this one isn't."
+},
+{
+"t":"frizzlemaxxing",
+"r":false,
+"k":true,
+"n":"Invented. The suffix does a lot of heavy lifting."
+},
+{
+"t":"bonkmaxxing",
+"r":false,
+"k":true,
+"n":"Invented. Another suffix trap."
+},
+{
+"t":"sneedmaxxing",
+"r":false,
+"k":true,
+"n":"Invented. The suffix carried it, didn't it."
+},
+{
+"t":"blorpmaxxing",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"noobmaxxing",
+"r":false,
+"k":true,
+"n":"Invented. Both halves real, the compound isn't."
+},
+{
+"t":"tastemaxxing",
+"r":false,
+"k":true,
+"n":"Invented. Smellmaxxing is real. This is not."
+},
+{
+"t":"hearmaxxing",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"gigafumbling",
+"r":false,
+"k":true,
+"n":"Invented. Fumbling is real, the giga tier isn't."
+},
+{
+"t":"snorp-pilled",
+"r":false,
+"k":true,
+"n":"Invented. -pilled is a real pattern."
+},
+{
+"t":"flonk era",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"drimpcore",
+"r":false,
+"k":true,
+"n":"Invented. -core is real, drimp is not."
+},
+{
+"t":"cottagecrust",
+"r":false,
+"k":true,
+"n":"Invented. Cottagecore's evil twin."
+},
+{
+"t":"zorp check",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"skrimb energy",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"plonk szn",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"grommet szn",
+"r":false,
+"k":true,
+"n":"Invented. Szn is real, grommet szn is not."
+},
+{
+"t":"frizz arc",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"crimb-coded",
+"r":false,
+"k":true,
+"n":"Invented. -coded is a real pattern."
+},
+{
+"t":"grimz behavior",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"grumbo moment",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"florp hours",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"twizzle farming",
+"r":false,
+"k":true,
+"n":"Invented. Aura farming is real."
+},
+{
+"t":"sporgle god",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"snizzle rights",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"plorb privilege",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"krimble points",
+"r":false,
+"k":true,
+"n":"Invented. Aura points are real."
+},
+{
+"t":"vronk activities",
+"r":false,
+"k":false,
+"n":"Invented."
+},
+{
+"t":"skibidi tax",
+"r":false,
+"k":true,
+"n":"Invented. Two real terms welded together."
+},
+{
+"t":"wumbo tax",
+"r":false,
+"k":true,
+"n":"Invented. Fanum tax is real. This is not."
+},
+{
+"t":"phantom tax",
+"r":false,
+"k":true,
+"n":"Invented. A mishearing that never caught on."
+},
+{
+"t":"clanker tax",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"huzz tax",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"rizz rebate",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"fanum refund",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"skibidi surcharge",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"aura laundering",
+"r":false,
+"k":true,
+"n":"Invented. Aura points are real; laundering them isn't."
+},
+{
+"t":"aura audit",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"aura pension",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"aura mortgage",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"aura fishing",
+"r":false,
+"k":true,
+"n":"Invented. Farming is real. Fishing is not."
+},
+{
+"t":"aura mining",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"aura foraging",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"gyatt gap",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"mog debt",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"yap ledger",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"yapology",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"yappuccino",
+"r":false,
+"k":true,
+"n":"Invented. Should be real. Isn't."
+},
+{
+"t":"cook check",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"delulu decree",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"delulu is the trululu",
+"r":false,
+"k":true,
+"n":"Invented. Solulu is real."
+},
+{
+"t":"trululu",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"grass credit",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"touch drywall",
+"r":false,
+"k":true,
+"n":"Invented. Grass is real. Drywall is not."
+},
+{
+"t":"touch gravel",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"touch asphalt",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"touch ceiling",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"chronically offline",
+"r":false,
+"k":true,
+"n":"Invented. The opposite of a real one."
+},
+{
+"t":"terminally offline",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"bed thriving",
+"r":false,
+"k":true,
+"n":"Invented. Bed rotting is real."
+},
+{
+"t":"floor rotting",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"goblin tier",
+"r":false,
+"k":true,
+"n":"Invented. Goblin mode is real."
+},
+{
+"t":"troll mode",
+"r":false,
+"k":true,
+"n":"Invented. Goblin mode is real."
+},
+{
+"t":"orc mode",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"gremlin math",
+"r":false,
+"k":true,
+"n":"Invented. Girl math is real."
+},
+{
+"t":"cat math",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"girl physics",
+"r":false,
+"k":true,
+"n":"Invented. Girl math is real."
+},
+{
+"t":"girl geometry",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"boy chemistry",
+"r":false,
+"k":true,
+"n":"Invented. Boy math is real."
+},
+{
+"t":"girl banquet",
+"r":false,
+"k":true,
+"n":"Invented. Girl dinner is real."
+},
+{
+"t":"roman republic",
+"r":false,
+"k":true,
+"n":"Invented. The Empire is real, as slang."
+},
+{
+"t":"greek empire",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"byzantine empire",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Real, as history."
+},
+{
+"t":"canon leak",
+"r":false,
+"k":true,
+"n":"Invented. Canon event is real."
+},
+{
+"t":"lore patch",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"core rumor",
+"r":false,
+"k":true,
+"n":"Invented. Core memory is real."
+},
+{
+"t":"main character loan",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"cameo energy",
+"r":false,
+"k":true,
+"n":"Invented. Main character energy is real."
+},
+{
+"t":"villain intermission",
+"r":false,
+"k":true,
+"n":"Invented. Villain era is real."
+},
+{
+"t":"villain prequel",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"flop insurance",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"flop intermission",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"slay license",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"serve permit",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"ate certificate",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"crumb audit",
+"r":false,
+"k":true,
+"n":"Invented. Ate and left no crumbs is real."
+},
+{
+"t":"chewed",
+"r":false,
+"k":true,
+"n":"Invented, as praise. Ate is real."
+},
+{
+"t":"bestie clause",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"twin clause",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"ong invoice",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"fr receipt",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"cap warranty",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"no hat",
+"r":false,
+"k":true,
+"n":"Invented. No cap is real."
+},
+{
+"t":"no visor",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"medium yikes",
+"r":false,
+"k":true,
+"n":"Invented. Big yikes is real."
+},
+{
+"t":"small yikes",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"yikes squared",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"oof cubed",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"and I aap",
+"r":false,
+"k":true,
+"n":"Invented. And I oop is real."
+},
+{
+"t":"skskskt",
+"r":false,
+"k":true,
+"n":"Invented. Close. Not close enough."
+},
+{
+"t":"VSCO dad",
+"r":false,
+"k":true,
+"n":"Invented. VSCO girl is real."
+},
+{
+"t":"e-uncle",
+"r":false,
+"k":true,
+"n":"Invented. E-girl and e-boy are real."
+},
+{
+"t":"e-grandma",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"shy launch",
+"r":false,
+"k":true,
+"n":"Invented. Soft launch is real."
+},
+{
+"t":"whisper launch",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"situationboat",
+"r":false,
+"k":true,
+"n":"Invented. Situationship is real."
+},
+{
+"t":"relationshop",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"whispering stage",
+"r":false,
+"k":true,
+"n":"Invented. Talking stage is real."
+},
+{
+"t":"mumbling stage",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"down mediocre",
+"r":false,
+"k":true,
+"n":"Invented. Down bad is real."
+},
+{
+"t":"up bad",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"domesticated",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Feral is real."
+},
+{
+"t":"gloomscrolling",
+"r":false,
+"k":true,
+"n":"Invented. Doomscrolling is real."
+},
+{
+"t":"doomhovering",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"croquette",
+"r":false,
+"k":true,
+"n":"Invented, as an aesthetic. Coquette is real. Croquette is a potato."
+},
+{
+"t":"tidy girl",
+"r":false,
+"k":true,
+"n":"Invented. Clean girl is real."
+},
+{
+"t":"rinsed girl",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"very brash very reckless",
+"r":false,
+"k":true,
+"n":"Invented. Very demure very mindful is real."
+},
+{
+"t":"brat monsoon",
+"r":false,
+"k":true,
+"n":"Invented. Brat summer is real."
+},
+{
+"t":"lukewarm girl summer",
+"r":false,
+"k":true,
+"n":"Invented. Hot girl summer is real."
+},
+{
+"t":"commat",
+"r":false,
+"k":true,
+"n":"Invented. Periodt is real."
+},
+{
+"t":"semicolont",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"spill the broth",
+"r":false,
+"k":true,
+"n":"Invented. Tea is real."
+},
+{
+"t":"spill the cocoa",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"throw umbra",
+"r":false,
+"k":true,
+"n":"Invented. Throw shade is real."
+},
+{
+"t":"invoices",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Receipts is real."
+},
+{
+"t":"coupons",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"grabbed",
+"r":false,
+"k":true,
+"n":"Invented, as praise. Snatched is real."
+},
+{
+"t":"pokes",
+"r":false,
+"k":true,
+"n":"Invented, of music. Slaps is real."
+},
+{
+"t":"thumper",
+"r":false,
+"k":true,
+"n":"Invented. Banger is real."
+},
+{
+"t":"hits similar",
+"r":false,
+"k":true,
+"n":"Invented. Hits different is real."
+},
+{
+"t":"misses different",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"the LLAMA",
+"r":false,
+"k":true,
+"n":"Invented. The GOAT is real."
+},
+{
+"t":"the YAK",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"brih",
+"r":false,
+"k":true,
+"n":"Invented. Bruh is real."
+},
+{
+"t":"bruhm",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"I'm cremated",
+"r":false,
+"k":true,
+"n":"Invented. I'm dead is real."
+},
+{
+"t":"mediumie",
+"r":false,
+"k":true,
+"n":"Invented. Bestie is real."
+},
+{
+"t":"okayie",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"expired",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Valid is real."
+},
+{
+"t":"modest side eye",
+"r":false,
+"k":true,
+"n":"Invented. Bombastic side eye is real."
+},
+{
+"t":"bombastic front eye",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"hiccuped",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Gagged is real."
+},
+{
+"t":"the yacht",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Ship is real."
+},
+{
+"t":"OTQ",
+"r":false,
+"k":true,
+"n":"Invented. OTP is real."
+},
+{
+"t":"headsequel",
+"r":false,
+"k":true,
+"n":"Invented. Headcanon is real."
+},
+{
+"t":"hamster behavior",
+"r":false,
+"k":true,
+"n":"Invented. Cat behavior is real."
+},
+{
+"t":"gecko behavior",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"he's whom",
+"r":false,
+"k":true,
+"n":"Invented. He's him is real."
+},
+{
+"t":"tweakmaxxing",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"the humility",
+"r":false,
+"k":true,
+"n":"Invented. The audacity is real."
+},
+{
+"t":"gaslight gatekeep grandpa",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"thad",
+"r":false,
+"k":true,
+"n":"Invented. Chad is real."
+},
+{
+"t":"gigathad",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"napset",
+"r":false,
+"k":true,
+"n":"Invented. Grindset is real."
+},
+{
+"t":"loungeset",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"what the omega",
+"r":false,
+"k":true,
+"n":"Invented. What the sigma is real."
+},
+{
+"t":"what the delta",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"epsilon male",
+"r":false,
+"k":true,
+"n":"Invented. Alpha, beta, sigma are real."
+},
+{
+"t":"lambda male",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"pc streamer",
+"r":false,
+"k":true,
+"n":"Invented. NPC streamer is real."
+},
+{
+"t":"soup so good",
+"r":false,
+"k":true,
+"n":"Invented. Ice cream so good is real."
+},
+{
+"t":"ice cream so mid",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"urm",
+"r":false,
+"k":true,
+"n":"Invented. Erm is real."
+},
+{
+"t":"what the flop",
+"r":false,
+"k":true,
+"n":"Invented. What the flip is real."
+},
+{
+"t":"bing freezing",
+"r":false,
+"k":true,
+"n":"Invented. Bing chilling is real."
+},
+{
+"t":"glizzard",
+"r":false,
+"k":true,
+"n":"Invented. Glizzy is real."
+},
+{
+"t":"finto",
+"r":false,
+"k":true,
+"n":"Invented. Finna is real."
+},
+{
+"t":"left on skim",
+"r":false,
+"k":true,
+"n":"Invented. Left on read is real."
+},
+{
+"t":"damp texter",
+"r":false,
+"k":true,
+"n":"Invented. Dry texter is real."
+},
+{
+"t":"humid texter",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"ziptie season",
+"r":false,
+"k":true,
+"n":"Invented. Cuffing season is real."
+},
+{
+"t":"hunger trap",
+"r":false,
+"k":true,
+"n":"Invented. Thirst trap is real."
+},
+{
+"t":"thirst net",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"weird stretch but ok",
+"r":false,
+"k":true,
+"n":"Invented. Weird flex but ok is real."
+},
+{
+"t":"large mood",
+"r":false,
+"k":true,
+"n":"Invented. Big mood is real."
+},
+{
+"t":"grand mood",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"appetiser",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Snack is real."
+},
+{
+"t":"toupee",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Wig is real."
+},
+{
+"t":"stirred",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Shook is real."
+},
+{
+"t":"surplus",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Extra is real."
+},
+{
+"t":"intermediate",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Basic is real."
+},
+{
+"t":"civil",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Savage is real."
+},
+{
+"t":"ok gen x",
+"r":false,
+"k":true,
+"n":"Invented. Ok boomer is real."
+},
+{
+"t":"kindle kid",
+"r":false,
+"k":true,
+"n":"Invented. iPad kid is real."
+},
+{
+"t":"calculator kid",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"walgreens kid",
+"r":false,
+"k":true,
+"n":"Invented. Sephora kid is real."
+},
+{
+"t":"ohio mini boss",
+"r":false,
+"k":true,
+"n":"Invented. Ohio final boss is real."
+},
+{
+"t":"ohio tutorial boss",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"ohio passport",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"ohio embassy",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"indiana",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Ohio is real."
+},
+{
+"t":"nebraska",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"delaware",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"eight nine",
+"r":false,
+"k":true,
+"n":"Invented. Six seven is real."
+},
+{
+"t":"four five",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"big front",
+"r":false,
+"k":true,
+"n":"Invented. Big back is real."
+},
+{
+"t":"small back",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"unc diploma",
+"r":false,
+"k":true,
+"n":"Invented. Unc status is real."
+},
+{
+"t":"rizzington",
+"r":false,
+"k":true,
+"n":"Invented. Rizzler is real."
+},
+{
+"t":"rizztopher",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"talent issue",
+"r":false,
+"k":true,
+"n":"Invented. Skill issue is real."
+},
+{
+"t":"luck issue",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"GB",
+"r":false,
+"k":true,
+"n":"Invented. GG is real."
+},
+{
+"t":"bonzo",
+"r":false,
+"k":true,
+"n":"Invented. Bozo is real."
+},
+{
+"t":"roofed",
+"r":false,
+"k":true,
+"n":"Invented. Based is real."
+},
+{
+"t":"let him bake",
+"r":false,
+"k":true,
+"n":"Invented. Let him cook is real."
+},
+{
+"t":"let him fry",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"let him simmer",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"saut\u00e9ed",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Cooked is real."
+},
+{
+"t":"braised",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"poached",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"diced",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Chopped is real."
+},
+{
+"t":"minced",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"julienned",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"frosting",
+"r":false,
+"k":true,
+"n":"Invented, as slang. Glazing is real."
+},
+{
+"t":"crashing in",
+"r":false,
+"k":true,
+"n":"Invented. Crashing out is real."
+},
+{
+"t":"crashing sideways",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"fractioned",
+"r":false,
+"k":true,
+"n":"Invented. Ratioed is real."
+},
+{
+"t":"it's lending",
+"r":false,
+"k":true,
+"n":"Invented. It's giving is real."
+},
+{
+"t":"it's borrowing",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"cousin is cousining",
+"r":false,
+"k":true,
+"n":"Invented. Mother is mothering is real."
+},
+{
+"t":"aunt is aunting",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"misread the syllabus",
+"r":false,
+"k":true,
+"n":"Invented. Understood the assignment is real."
+},
+{
+"t":"skipped the assignment",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"living rent controlled",
+"r":false,
+"k":true,
+"n":"Invented. Rent free is real."
+},
+{
+"t":"subletting",
+"r":false,
+"k":true,
+"n":"Invented, as slang."
+},
+{
+"t":"vibe audit",
+"r":false,
+"k":true,
+"n":"Invented. Vibe check is real."
+},
+{
+"t":"vibe census",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"simpington",
+"r":false,
+"k":true,
+"n":"Invented. Simp is real."
+},
+{
+"t":"the ack",
+"r":false,
+"k":true,
+"n":"Invented. The ick is real."
+},
+{
+"t":"the eck",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"taupe flag",
+"r":false,
+"k":true,
+"n":"Invented. Beige flag is real."
+},
+{
+"t":"mauve flag",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"teal flag",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"phantoming",
+"r":false,
+"k":true,
+"n":"Invented. Ghosting is real."
+},
+{
+"t":"spectering",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"croutoning",
+"r":false,
+"k":true,
+"n":"Invented. Breadcrumbing is real."
+},
+{
+"t":"baguetting",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"AI broth",
+"r":false,
+"k":true,
+"n":"Invented. AI slop is real."
+},
+{
+"t":"AI porridge",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"goes medium",
+"r":false,
+"k":true,
+"n":"Invented. Goes hard is real."
+},
+{
+"t":"goes firm",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"mini boss energy",
+"r":false,
+"k":true,
+"n":"Invented."
+},
+{
+"t":"hood remix",
+"r":false,
+"k":true,
+"n":"Invented, as praise. Hood classic is real."
+},
+{
+"t":"prambulo fantastico",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot. Convincing, though."
+},
+{
+"t":"spaghettini yappini",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot. Two real words, no real meme."
+},
+{
+"t":"bombolino trattorio",
+"r":false,
+"k":true,
+"n":"Fake. Close cousin of a real one, which is the trap."
+},
+{
+"t":"trombonini gelatini",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot. Entirely fabricated."
+},
+{
+"t":"rizzardo bambino",
+"r":false,
+"k":true,
+"n":"Fake. Real prefix, invented character."
+},
+{
+"t":"glorpini crocodilini",
+"r":false,
+"k":true,
+"n":"Fake. Deliberately near-miss on a real one."
+},
+{
+"t":"arancino assassino",
+"r":false,
+"k":true,
+"n":"Fake. Cappuccino assassino is real. This is a rice ball."
+},
+{
+"t":"mozzarello scooterino",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"gelato pistolero",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"lasagnini bambini",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"espressino turbino",
+"r":false,
+"k":true,
+"n":"Fake. Espressona signora is real."
+},
+{
+"t":"frittata karatista",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"gnocchi pilota",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"risotto bandito",
+"r":false,
+"k":true,
+"n":"Fake. Bobrito bandito is real."
+},
+{
+"t":"panini tsunami",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"biscotti robotti",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"cannoli anomali",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"tiramisu kung fu",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"prosciutto astronauto",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"polenta violenta",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"ravioli ninja",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"calzone ciclone",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"burrata pirata",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"pesto manifesto",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"linguine houdini",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"capellini zeppelini",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"focaccia ballista",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"tortellini martini",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"gorgonzola gondola",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"bruschetta rocketta",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+},
+{
+"t":"tagliatelle tarantella",
+"r":false,
+"k":true,
+"n":"Fake Italian brainrot."
+}
+]
+};</script>
+<div class="ambient" aria-hidden="true"></div>
+
+<main class="stage">
+  <div class="frame" id="frame">
+
+    <!-- &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; TITLE &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+    <section class="screen on title-screen" id="s-title">
+      <div>
+        <h1 class="wordmark">ROT<br>CHECK</h1>
+        <p class="tagline">Real slang, or <b>AI slop</b>? You get about a second to decide. Guess wrong and the meter eats you.</p>
+        <ul class="rule-list">
+          <li><span class="swatch sw-real">&rarr;</span> Swipe right if the term is <b>real</b></li>
+          <li><span class="swatch sw-fake">&larr;</span> Swipe left if it's <b>made up</b></li>
+          <li><span class="swatch sw-hard">3&times;</span> <b>High Rot</b> cards pay triple &mdash; and cost more if you miss</li>
+          <li><span class="swatch sw-spon">$</span> Yellow cards are ads. Swipe either way.</li>
+        </ul>
+        <p class="best-line">PERSONAL BEST <span id="best-title">0</span> &middot; RANK <span id="rank-title">NPC</span></p>
+      </div>
+      <button class="btn btn-lg" id="btn-start" type="button">START THE ROT</button>
+    </section>
+
+    <!-- &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; PLAY &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+    <section class="screen" id="s-play">
+      <div class="hud">
+        <div class="hud-row">
+          <div><span class="stat-k">Score</span><span class="stat-v" id="score">0</span></div>
+          <div class="combo" id="combo-wrap"><span class="stat-k">Streak</span><span class="stat-v" id="combo">&times;1</span></div>
+        </div>
+        <div class="meter"><div class="meter-fill" id="meter"></div></div>
+      </div>
+
+      <div class="arena" id="arena"></div>
+
+      <div class="controls">
+        <div class="btn-row">
+          <button class="btn btn-fake" id="btn-fake" type="button">&larr; FAKE</button>
+          <button class="btn btn-real" id="btn-real" type="button">REAL &rarr;</button>
+        </div>
+        <p class="hint">Drag the card, or use &larr; / &rarr; keys</p>
+      </div>
+    </section>
+
+    <!-- &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; GAME OVER &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+    <section class="screen over" id="s-over">
+      <div>
+        <span class="stat-k">You got cooked at</span>
+        <div class="score-big" id="final-score">0</div>
+        <h2 class="rank" id="final-rank">NPC</h2>
+        <div class="over-grid">
+          <div class="tile"><span class="stat-k">Best streak</span><b id="final-streak">&times;1</b></div>
+          <div class="tile"><span class="stat-k">Accuracy</span><b id="final-acc">0%</b></div>
+          <div class="tile"><span class="stat-k">High Rot nailed</span><b id="final-hard">0</b></div>
+          <div class="tile"><span class="stat-k">Personal best</span><b id="final-best">0</b></div>
+        </div>
+        <textarea class="share-out" id="share-out" readonly aria-label="Copy your score"></textarea>
+      </div>
+      <div class="controls" style="padding:0">
+        <button class="btn btn-reward" id="btn-revive" type="button">&#9654; WATCH AD, KEEP YOUR SCORE</button>
+        <button class="btn btn-lg" id="btn-again" type="button">RUN IT BACK</button>
+        <button class="btn-ghost" id="btn-share" type="button">Share your rot score</button>
+      </div>
+    </section>
+
+    <!-- &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; AD OVERLAY (house / fallback renderer) &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+    <div class="overlay" id="overlay" role="dialog" aria-label="Advertisement">
+      <span class="ad-badge" id="ov-badge">Advertisement</span>
+      <div class="ad-ring" id="ov-ring"></div>
+      <div class="ad-brand" id="ov-brand">GOOBER ENERGY</div>
+      <p class="ad-copy" id="ov-copy">Legally distinct from sleep.</p>
+      <p class="ad-timer" id="ov-timer">5</p>
+      <button class="btn-ghost" id="ov-skip" type="button" style="display:none;max-width:220px">Skip</button>
+    </div>
+  </div>
+
+  <!-- &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; INSTALL BANNER &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+  <div class="install" id="install">
+    <p id="install-copy"><b>Install Rot Check</b><br>Add it to your home screen &#8212; plays offline.</p>
+    <button id="install-go" type="button">INSTALL</button>
+    <button class="x" id="install-x" type="button" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <!-- &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; ADVERTISER DRAWER &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+  <section class="metrics" id="metrics">
+    <button class="metrics-head" id="metrics-toggle" type="button" aria-expanded="false" aria-controls="metrics-body">
+      <span>Ad inventory &middot; live from this device</span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div class="metrics-body" id="metrics-body">
+      <p class="m-note">Every unit below is real inventory this build already serves. The numbers update as you play &#8212; this is the page you put in front of a media buyer.</p>
+      <table class="m-table">
+        <thead><tr><th>Unit</th><th>Delivered</th></tr></thead>
+        <tbody>
+          <tr><td>Sessions</td><td id="m-runs">0</td></tr>
+          <tr class="hi"><td>In-deck sponsor cards</td><td id="m-spon">0</td></tr>
+          <tr><td>Sponsor card swipes</td><td id="m-sponswipe">0</td></tr>
+          <tr><td>Interstitials</td><td id="m-inter">0</td></tr>
+          <tr class="hi"><td>Rewarded completions</td><td id="m-reward">0</td></tr>
+          <tr><td>Total impressions</td><td id="m-imp">0</td></tr>
+          <tr><td>Time in app</td><td id="m-time">0s</td></tr>
+        </tbody>
+      </table>
+      <div class="proj">
+        <div class="proj-k">Projected monthly net &middot; at 100,000 DAU</div>
+        <div class="proj-v" id="m-proj">$0</div>
+        <p class="proj-note">Extrapolates <em>your</em> observed impressions-per-session against blended eCPMs of $4 in-deck / $9 interstitial / $22 rewarded. Play a few rounds to move it.</p>
+      </div>
+      <p class="ad-status" id="ad-status">Ad provider: detecting&#8230;</p>
+    </div>
+  </section>
+
+  <p class="colophon">House ad units with fictional brands. The published build ships with AdMob and H5 Games Ads adapters ready to switch on.</p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ==========================================================
+     1. CONTENT
+     The whole scaling story lives in this array. Adding a
+     hundred terms is a data change, not a code change.
+     CONTENT_URL lets you refresh the deck weekly from a CDN
+     without shipping an app update.
+     ========================================================== */
+  // Same deck.json the iOS app bundles. Relative = same origin as this page.
+  // The shareable single-file build inlines it as window.__DECK instead.
+  const CONTENT_URL = "deck.json";
+
+  let DECK = [
+    // \u2500\u2500 real \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    { t: "skibidi",              r: 1, h: "From the Skibidi Toilet series. Means roughly nothing, deployed constantly." },
+    { t: "rizz",                 r: 1, h: "Charisma, specifically the flirting kind." },
+    { t: "gyatt",                r: 1, h: "An exclamation of shock. Streamer-born, now everywhere." },
+    { t: "fanum tax",            r: 1, h: "Taxing a friend's food. Named for the streamer who kept doing it." },
+    { t: "mewing",               r: 1, h: "Tongue-to-palate jaw posture. A whole subculture." },
+    { t: "delulu",               r: 1, h: "Delusional, affectionately. Usually about a crush." },
+    { t: "looksmaxxing",         r: 1, h: "Optimising your appearance with unsettling intensity." },
+    { t: "mogging",              r: 1, h: "Out-attractive-ing someone just by standing near them." },
+    { t: "aura points",          r: 1, d: 2, h: "An imaginary scoreboard for how cool an action was." },
+    { t: "crashing out",         r: 1, h: "Losing it emotionally, publicly, on purpose." },
+    { t: "glazing",              r: 1, h: "Praising someone way past the point of dignity." },
+    { t: "cooked",               r: 1, h: "Finished. Doomed. No recovery available." },
+    { t: "chopped",              r: 1, h: "Unattractive, or badly beaten at something." },
+    { t: "yapping",              r: 1, h: "Talking far too much. See also: yap session." },
+    { t: "NPC",                  r: 1, h: "Someone running on autopilot with stock dialogue." },
+    { t: "touch grass",          r: 1, h: "Go outside. You have been extremely online." },
+    { t: "ratio",                r: 1, h: "Your reply outperformed the post. Devastating." },
+    { t: "it's giving",          r: 1, d: 2, h: "It resembles / it evokes. Ballroom slang gone global." },
+    { t: "bussin",               r: 1, h: "Genuinely delicious. Mostly about food." },
+    { t: "clanker",              r: 1, d: 2, h: "A robot, said with disdain." },
+    { t: "tralalero tralala",    r: 1, h: "Italian brainrot. A shark in Nikes. Yes, really." },
+    { t: "bombardiro crocodilo", r: 1, h: "Italian brainrot. Crocodile-bomber hybrid." },
+    { t: "tung tung tung sahur", r: 1, h: "Italian brainrot, via Indonesian Ramadan wake-up drums." },
+    { t: "ballerina cappuccina", r: 1, h: "Italian brainrot. Ballerina, cappuccino head." },
+    { t: "brr brr patapim",      r: 1, d: 2, h: "Italian brainrot. Tree-legged proboscis creature." },
+    { t: "chimpanzini bananini", r: 1, d: 2, h: "Italian brainrot. Chimp in a banana." },
+    { t: "sigma",                r: 1, h: "The lone-wolf archetype. Almost always ironic now." },
+    { t: "mid",                  r: 1, h: "Aggressively average. The cruellest rating." },
+    { t: "opps",                 r: 1, d: 2, h: "Your enemies. Drill-rap origin, universal usage." },
+    { t: "sending me",           r: 1, d: 2, h: "Making me laugh uncontrollably." },
+    { t: "cheugy",               r: 1, d: 2, h: "Try-hard outdated millennial taste." },
+    { t: "let him cook",         r: 1, d: 2, h: "Stand back, he might be onto something." },
+
+    // \u2500\u2500 fake (invented for this deck) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    { t: "grimzo",               r: 0, h: "Invented. Sounds plausible, means nothing." },
+    { t: "crumbmaxxing",         r: 0, d: 2, h: "Invented. -maxxing is real, this one isn't." },
+    { t: "vibecrashing",         r: 0, h: "Invented. You were pattern-matching, weren't you." },
+    { t: "yeetus deluxe",        r: 0, h: "Invented. Yeet is real; the deluxe edition is not." },
+    { t: "prambulo fantastico",  r: 0, h: "Fake Italian brainrot. Convincing, though." },
+    { t: "spaghettini yappini",  r: 0, h: "Fake Italian brainrot. Two real words, no real meme." },
+    { t: "bombolino trattorio",  r: 0, d: 2, h: "Fake. Close cousin of a real one, which is the trap." },
+    { t: "trombonini gelatini",  r: 0, d: 2, h: "Fake Italian brainrot. Entirely fabricated." },
+    { t: "rizzardo bambino",     r: 0, d: 2, h: "Fake. Real prefix, invented character." },
+    { t: "snorpling",            r: 0, h: "Invented. Not a thing. Never was." },
+    { t: "gigafumbling",         r: 0, d: 2, h: "Invented. Fumbling is real, the giga tier isn't." },
+    { t: "sneedmaxxing",         r: 0, d: 2, h: "Invented. The suffix carried it, didn't it." },
+    { t: "wumbo tax",            r: 0, d: 2, h: "Invented. Fanum tax is real. This is not." },
+    { t: "yappuccino",           r: 0, d: 2, h: "Invented. Should be real. Isn't." },
+    { t: "skrimblo",             r: 0, h: "Invented. Pure nonsense, correctly identified." },
+    { t: "bonkmaxxing",          r: 0, d: 2, h: "Invented. Another suffix trap." },
+    { t: "flonkered",            r: 0, h: "Invented. Sounds like something. It is not." },
+    { t: "drimpy",               r: 0, h: "Invented. Zero usage anywhere." },
+    { t: "glorpini crocodilini", r: 0, d: 2, h: "Fake. Deliberately near-miss on a real one." },
+    { t: "zorpo",                r: 0, h: "Invented. No lore, no meme, no nothing." },
+    { t: "crimbus rights",       r: 0, h: "Invented. Confidently fake." },
+    { t: "aura laundering",      r: 0, d: 2, h: "Invented. Aura points are real; laundering them isn't." },
+    { t: "frizzlemaxxing",       r: 0, d: 2, h: "Invented. Suffix does a lot of heavy lifting." },
+    { t: "plonkers only",        r: 0, h: "Invented. Not a thing." },
+    { t: "skibidi tax",          r: 0, d: 2, h: "Invented. Two real terms welded together. Sneaky." },
+    { t: "grommet szn",          r: 0, d: 2, h: "Invented. Szn is real, grommet szn is not." }
+  ];
+
+  /* House ad inventory \u2014 fictional brands. These serve when no
+     network fills, so the game never shows an empty slot. */
+  const SPONSORS = [
+    { brand: "GOOBER ENERGY",  copy: "Legally distinct from sleep.",              cta: "GET GOOBED" },
+    { brand: "ZAPPO WIRELESS", copy: "Unlimited data. Limited patience.",         cta: "SWITCH NOW" },
+    { brand: "NULLBANK",       copy: "Banking for people who don't read things.", cta: "OPEN ACCOUNT" },
+    { brand: "PIXLDROP",       copy: "Sneakers that render in under 3 seconds.",  cta: "COP A PAIR" },
+    { brand: "MOGGLE",         copy: "Language learning. Aggressively.",          cta: "TRY FREE" }
+  ];
+
+  const RANKS = [
+    { min: 0,     name: "NPC" },
+    { min: 800,   name: "Certified Yapper" },
+    { min: 2000,  name: "Junior Rizzler" },
+    { min: 4000,  name: "Aura Farmer" },
+    { min: 7000,  name: "Sigma Analyst" },
+    { min: 11000, name: "Chief Brainrot Officer" }
+  ];
+
+  /* ==========================================================
+     2. STORAGE + TELEMETRY
+     ========================================================== */
+  const KEY = "rotcheck.v1";
+  const M = load();
+
+  function load() {
+    const base = { best: 0, runs: 0, spon: 0, sponSwipe: 0, inter: 0, reward: 0, imp: 0, secs: 0 };
+    try {
+      const raw = localStorage.getItem(KEY);
+      return raw ? Object.assign(base, JSON.parse(raw)) : base;
+    } catch (e) { return base; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(M)); } catch (e) { /* private mode */ }
+  }
+
+  /* Point this at your analytics SDK. Every funnel-critical moment
+     already fires through here. */
+  function track(event, props) {
+    props = props || {};
+    if (window.gtag)      { window.gtag("event", event, props); }
+    if (window.posthog)   { window.posthog.capture(event, props); }
+    if (window.firebase && window.firebase.analytics) { window.firebase.analytics().logEvent(event, props); }
+    if (!window.gtag && !window.posthog) { console.log("[rot-check]", event, props); }
+  }
+
+  function haptic(ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
+  }
+
+  /* ==========================================================
+     3. AD LAYER
+     One interface, three providers, tried in order:
+       1. AdMob        (native builds via Capacitor)
+       2. H5 Games Ads (mobile web / adsense adBreak)
+       3. House ads    (always available, never an empty slot)
+     Swapping networks means editing only this block.
+     ========================================================== */
+  const ADS = {
+    provider: "house",
+
+    async init() {
+      // ---- 1. Native: Capacitor + AdMob ----------------------
+      try {
+        const cap = window.Capacitor;
+        if (cap && cap.isNativePlatform && cap.isNativePlatform() && window.AdMob) {
+          await window.AdMob.initialize({ initializeForTesting: false });
+          this.provider = "admob";
+          this._admobIds = {
+            interstitial: "ca-app-pub-XXXXXXXX/YYYYYYYY",   // TODO: your AdMob unit ids
+            rewarded:     "ca-app-pub-XXXXXXXX/ZZZZZZZZ"
+          };
+          this.status("AdMob (native)");
+          return;
+        }
+      } catch (e) { /* fall through */ }
+
+      // ---- 2. Web: Google H5 Games Ads -----------------------
+      if (typeof window.adConfig === "function") {
+        try {
+          window.adConfig({ preloadAdBreaks: "on", sound: "off" });
+          this.provider = "h5";
+          this.status("H5 Games Ads (web)");
+          return;
+        } catch (e) { /* fall through */ }
+      }
+
+      // ---- 3. House ads --------------------------------------
+      this.provider = "house";
+      this.status("House ads (no network wired yet)");
+    },
+
+    status(text) {
+      const n = document.getElementById("ad-status");
+      if (n) n.textContent = "Ad provider: " + text;
+    },
+
+    /* type: "interstitial" | "rewarded". onDone runs when the unit closes.
+       For rewarded, onDone(true) means the reward was earned. */
+    show(type, onDone) {
+      if (el.overlay.classList.contains("on")) return;   // never stack two units
+      // Report rather than swallow: a throw in here used to vanish silently,
+      // which hides exactly the bugs that break the revive path.
+      const done = function (earned) {
+        try { onDone(earned !== false); }
+        catch (e) { track("ad_callback_error", { message: String(e) }); console.error(e); }
+      };
+
+      M.imp++;
+      if (type === "rewarded") { M.reward++; } else { M.inter++; }
+      save(); paintMetrics();
+      track("ad_impression", { ad_type: type, provider: this.provider });
+
+      if (this.provider === "admob") { return this._admob(type, done); }
+      if (this.provider === "h5")    { return this._h5(type, done); }
+      return this._house(type, done);
+    },
+
+    async _admob(type, done) {
+      try {
+        const id = this._admobIds[type === "rewarded" ? "rewarded" : "interstitial"];
+        if (type === "rewarded") {
+          await window.AdMob.prepareRewardVideoAd({ adId: id });
+          const res = await window.AdMob.showRewardVideoAd();
+          done(!!res);
+        } else {
+          await window.AdMob.prepareInterstitial({ adId: id });
+          await window.AdMob.showInterstitial();
+          done(true);
+        }
+      } catch (e) {
+        track("ad_error", { provider: "admob", message: String(e) });
+        this._house(type, done);        // no fill \u2192 house ad, never a dead end
+      }
+    },
+
+    _h5(type, done) {
+      try {
+        window.adBreak({
+          type: type === "rewarded" ? "reward" : "next",
+          name: type === "rewarded" ? "revive" : "game_over",
+          beforeReward: function (showAdFn) { showAdFn(); },
+          adDismissed:  function () { done(false); },
+          adViewed:     function () { done(true); },
+          adBreakDone:  function (info) { if (info && info.breakStatus !== "viewed") done(false); }
+        });
+      } catch (e) {
+        track("ad_error", { provider: "h5", message: String(e) });
+        this._house(type, done);
+      }
+    },
+
+    /* House renderer \u2014 also the visual spec any network creative slots into. */
+    _house(type, done) {
+      const s = SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
+      const secs = type === "rewarded" ? 6 : 5;
+      el.ovBadge.textContent = type === "rewarded" ? "Rewarded video" : "Advertisement";
+      el.ovBrand.textContent = s.brand;
+      el.ovCopy.textContent = s.copy;
+      el.ovSkip.style.display = "none";
+      el.overlay.classList.add("on");
+
+      let left = secs;
+      el.ovTimer.textContent = left;
+      el.ovRing.style.setProperty("--p", "0%");
+      clearInterval(this._t);
+      const self = this;
+      this._t = setInterval(function () {
+        left--;
+        el.ovTimer.textContent = left > 0 ? left : "";
+        el.ovRing.style.setProperty("--p", ((secs - left) / secs * 100) + "%");
+        if (left <= 0) {
+          clearInterval(self._t);
+          el.ovSkip.style.display = "";
+          el.ovSkip.textContent = type === "rewarded" ? "Claim reward" : "Continue";
+          el.ovSkip.focus();
+          self._done = done;
+        }
+      }, 1000);
+    },
+
+    closeHouse() {
+      el.overlay.classList.remove("on");
+      const d = this._done; this._done = null;
+      if (d) d(true);
+    },
+
+    _t: null, _done: null, _admobIds: null
+  };
+
+  /* ========================================================== 4. DOM ========================================================== */
+  const el = {};
+  ["frame","s-title","s-play","s-over","arena","score","combo","combo-wrap","meter",
+   "btn-start","btn-fake","btn-real","btn-again","btn-revive","btn-share",
+   "final-score","final-rank","final-streak","final-acc","final-hard","final-best",
+   "best-title","rank-title","share-out","overlay","ov-badge","ov-brand","ov-copy",
+   "ov-timer","ov-skip","ov-ring","metrics","metrics-toggle","m-runs","m-spon",
+   "m-sponswipe","m-inter","m-reward","m-imp","m-time","m-proj",
+   "install","install-go","install-x","install-copy"
+  ].forEach(function (id) {
+    el[id.replace(/-(\w)/g, function (_, c) { return c.toUpperCase(); })] = document.getElementById(id);
+  });
+
+  /* ========================================================== 5. STATE ========================================================== */
+  const START_TIME  = 100;   // meter percent
+  const DRAIN_BASE  = 7.5;   // percent per second at level 1
+  const REWARD_TIME = 11;    // percent returned per correct card
+  const PENALTY     = 22;    // percent lost on a miss
+  const AD_EVERY    = [5, 8];// sponsor card cadence, min/max real cards between
+  const HARD_CHANCE = 0.08; // odds an ordinary card is promoted to High Rot
+  const HARD_TRICKY = 0.45; // odds for a term the deck flags as tricky (d:2)
+  const HARD_BONUS  = 3;    // score multiplier on a High Rot card
+  const HARD_RISK   = 1.5;  // penalty multiplier if you blow one
+
+  let S = null;
+  let raf = null, lastT = 0;
+
+  function newRun() {
+    return {
+      queue: buildQueue(), i: 0,
+      score: 0, streak: 0, mult: 1, bestStreak: 0,
+      right: 0, wrong: 0, cards: 0, hardRight: 0,
+      time: START_TIME, revived: false, alive: true,
+      untilAd: adGap()
+    };
+  }
+  function adGap() {
+    return AD_EVERY[0] + Math.floor(Math.random() * (AD_EVERY[1] - AD_EVERY[0] + 1));
+  }
+
+  function buildQueue() {
+    const pool = DECK.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    return pool.concat(pool.slice().reverse());   // runway for a long run
+  }
+
+  function nextCard() {
+    if (S.untilAd <= 0) {
+      S.untilAd = adGap();
+      const s = SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
+      return { ad: true, t: s.brand, h: s.copy, cta: s.cta };
+    }
+    S.untilAd--;
+    const c = S.queue[S.i % S.queue.length];
+    S.i++;
+    // High Rot is always a dice roll, so it stays unpredictable \u2014 the deck's
+    // genuinely tricky terms (d:2) just roll with much better odds. Copy the
+    // entry so the flag never sticks to the deck itself.
+    const odds = c.d === 2 ? HARD_TRICKY : HARD_CHANCE;
+    return Object.assign({}, c, { hard: Math.random() < odds });
+  }
+
+  /* ========================================================== 6. RENDER ========================================================== */
+  function showScreen(name) {
+    [el.sTitle, el.sPlay, el.sOver].forEach(function (s) { s.classList.remove("on"); });
+    ({ title: el.sTitle, play: el.sPlay, over: el.sOver })[name].classList.add("on");
+  }
+
+  function cardEl(data) {
+    const c = document.createElement("div");
+    c.className = "card" + (data.ad ? " ad" : "");
+    if (data.ad) {
+      c.innerHTML =
+        '<div class="card-eyebrow">Paid partnership &middot; swipe either way</div>' +
+        '<h2 class="card-term"></h2>' +
+        '<div><p class="card-foot"></p><div class="ad-cta"></div></div>';
+      c.querySelector(".card-term").textContent = data.t;
+      c.querySelector(".card-foot").textContent = data.h;
+      c.querySelector(".ad-cta").textContent = data.cta;
+    } else {
+      c.innerHTML =
+        '<div class="card-eyebrow"><span>Real slang, or AI slop?</span>' +
+          (data.hard ? '<span class="hard-badge">HIGH ROT &times;3</span>' : '') +
+        '</div>' +
+        '<h2 class="card-term"></h2>' +
+        '<p class="card-foot">&larr; fake &nbsp;&middot;&nbsp; real &rarr;</p>' +
+        '<div class="stamp stamp-fake">FAKE</div>' +
+        '<div class="stamp stamp-real">REAL</div>';
+      if (data.hard) c.classList.add("hard");
+      c.querySelector(".card-term").textContent = data.t;
+    }
+    c._data = data;
+    return c;
+  }
+
+  /* Cards mid-flight still sit in the DOM. Everything below counts only
+     the live ones, so the stack refills the instant a card is swiped
+     rather than waiting out its exit animation. */
+  function liveCards() {
+    // Query .card specifically: the arena also holds transient score popups,
+    // and counting those as cards corrupts the stack.
+    return Array.prototype.slice.call(el.arena.querySelectorAll(".card"))
+      .filter(function (c) { return !c.classList.contains("gone"); });
+  }
+  function topCard() {
+    const live = liveCards();
+    return live.length ? live[live.length - 1] : null;
+  }
+
+  function fillArena() {
+    while (liveCards().length < 3) {
+      el.arena.insertBefore(cardEl(nextCard()), el.arena.firstChild);
+    }
+    restack();
+  }
+
+  function restack() {
+    const kids = liveCards().reverse();   // last live child = top
+    kids.forEach(function (c, i) {
+      c.dataset.depth = i;
+      c.classList.toggle("top", i === 0);
+    });
+    const t = kids[0];
+    if (!t) return;
+    el.frame.classList.toggle("sponsored", !!(t._data && t._data.ad));
+    if (t._data && t._data.ad && !t._counted) {
+      t._counted = true;
+      M.spon++; M.imp++; save(); paintMetrics();
+      track("sponsor_card_impression", { brand: t._data.t });
+    }
+    bindDrag(t);
+  }
+
+  /* Floating "+900" so a High Rot win registers as a win. */
+  function scorePop(text) {
+    const n = document.createElement("div");
+    n.className = "score-pop";
+    n.textContent = text;
+    el.arena.appendChild(n);
+    setTimeout(function () { if (n.parentNode) n.parentNode.removeChild(n); }, 780);
+  }
+
+  function paintHud() {
+    el.score.textContent = S.score.toLocaleString();
+    el.combo.textContent = "\u00d7" + S.mult;
+    el.comboWrap.classList.toggle("hot", S.mult >= 3);
+    el.comboWrap.classList.toggle("max", S.mult >= 10);
+    const pct = Math.max(0, Math.min(100, S.time));
+    el.meter.style.transform = "scaleX(" + (pct / 100) + ")";
+    el.meter.classList.toggle("low", pct < 25);
+  }
+
+  function paintMetrics() {
+    el.mRuns.textContent = M.runs;
+    el.mSpon.textContent = M.spon;
+    el.mSponswipe.textContent = M.sponSwipe;
+    el.mInter.textContent = M.inter;
+    el.mReward.textContent = M.reward;
+    el.mImp.textContent = M.imp;
+    el.mTime.textContent = fmtTime(M.secs);
+
+    const runs = Math.max(1, M.runs);
+    const DAU = 100000, DAYS = 30;
+    const revenue =
+      (M.spon   / runs * 4  / 1000) * DAU * DAYS +
+      (M.inter  / runs * 9  / 1000) * DAU * DAYS +
+      (M.reward / runs * 22 / 1000) * DAU * DAYS;
+    el.mProj.textContent = "$" + Math.round(revenue).toLocaleString();
+  }
+
+  function fmtTime(s) {
+    s = Math.round(s);
+    if (s < 60) return s + "s";
+    return Math.floor(s / 60) + "m " + (s % 60) + "s";
+  }
+
+  function rankFor(score) {
+    let name = RANKS[0].name;
+    RANKS.forEach(function (r) { if (score >= r.min) name = r.name; });
+    return name;
+  }
+
+  /* ========================================================== 7. INPUT ========================================================== */
+  function bindDrag(card) {
+    if (card._bound) return;
+    card._bound = true;
+
+    let startX = 0, dx = 0, dy = 0, dragging = false;
+    const fakeStamp = card.querySelector(".stamp-fake");
+    const realStamp = card.querySelector(".stamp-real");
+
+    card.addEventListener("pointerdown", function (e) {
+      if (!S || !S.alive || card.dataset.depth !== "0" || card._answered) return;
+      dragging = true; startX = e.clientX;
+      const startY = e.clientY;
+      card._sy = startY;
+      try { card.setPointerCapture(e.pointerId); } catch (err) {}
+      card.style.transition = "none";
+    });
+
+    card.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      dx = e.clientX - startX;
+      dy = e.clientY - card._sy;
+      card.style.transform = "translate(" + dx + "px," + dy * 0.28 + "px) rotate(" + (dx * 0.055) + "deg)";
+      if (fakeStamp) {
+        fakeStamp.style.opacity = dx < 0 ? Math.min(1, -dx / 90) : 0;
+        realStamp.style.opacity = dx > 0 ? Math.min(1, dx / 90) : 0;
+      }
+    }, { passive: true });
+
+    function release() {
+      if (!dragging) return;
+      dragging = false;
+      card.style.transition = "";
+      if (Math.abs(dx) > 85) {
+        answer(dx > 0 ? 1 : 0);
+      } else {
+        card.style.transform = "";
+        if (fakeStamp) { fakeStamp.style.opacity = 0; realStamp.style.opacity = 0; }
+      }
+      dx = 0; dy = 0;
+    }
+    card.addEventListener("pointerup", release);
+    card.addEventListener("pointercancel", release);
+  }
+
+  /* choice: 1 = swiped REAL (right), 0 = swiped FAKE (left) */
+  function answer(choice) {
+    if (!S || !S.alive) return;
+    const t = topCard();
+    if (!t || t._answered) return;      // guard against key-mashing one card
+    t._answered = true;
+    const data = t._data;
+
+    if (data.ad) {
+      S.time = Math.min(100, S.time + 8);
+      M.sponSwipe++; save(); paintMetrics();
+      haptic(12);
+      track("sponsor_card_swipe", { brand: data.t, dir: choice ? "right" : "left" });
+    } else {
+      S.cards++;
+      if (choice === data.r) {
+        S.right++;
+        S.streak++;
+        S.bestStreak = Math.max(S.bestStreak, S.streak);
+        S.mult = S.streak >= 15 ? 10 : S.streak >= 10 ? 5 : S.streak >= 6 ? 3 : S.streak >= 3 ? 2 : 1;
+        const gained = 100 * S.mult * (data.hard ? HARD_BONUS : 1);
+        S.score += gained;
+        S.time = Math.min(100, S.time + REWARD_TIME);
+        if (data.hard) {
+          S.hardRight++;
+          scorePop("+" + gained.toLocaleString());
+          haptic([12, 30, 18]);
+        } else {
+          haptic(10);
+        }
+        el.comboWrap.classList.remove("bump");
+        void el.comboWrap.offsetWidth;
+        el.comboWrap.classList.add("bump");
+      } else {
+        S.wrong++;
+        S.streak = 0;
+        S.mult = 1;
+        S.time -= PENALTY * (data.hard ? HARD_RISK : 1);
+        haptic([30, 40, 30]);
+        el.frame.classList.remove("shake");
+        void el.frame.offsetWidth;
+        el.frame.classList.add("shake");
+      }
+    }
+
+    const dir = choice ? 1 : -1;
+    t.classList.add("gone");
+    t.style.transform = "translate(" + (dir * 520) + "px,-40px) rotate(" + (dir * 26) + "deg)";
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 340);
+
+    paintHud();
+    if (S.time <= 0) { gameOver(); return; }
+    fillArena();
+  }
+
+  /* ========================================================== 8. LOOP ========================================================== */
+  function tick(t) {
+    if (!S || !S.alive) return;
+    if (!lastT) lastT = t;
+    const dt = Math.min(0.1, (t - lastT) / 1000);
+    lastT = t;
+
+    const level = 1 + Math.floor(S.score / 1500);
+    S.time -= DRAIN_BASE * (1 + level * 0.16) * dt;
+    M.secs += dt;
+
+    paintHud();
+    if (S.time <= 0) { gameOver(); return; }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function startRun() {
+    S = newRun();
+    lastT = 0;
+    el.arena.innerHTML = "";
+    fillArena();
+    paintHud();
+    showScreen("play");
+    M.runs++; save(); paintMetrics();
+    track("run_start", { run: M.runs });
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(tick);
+  }
+
+  function gameOver() {
+    if (!S || !S.alive) return;
+    S.alive = false;
+    cancelAnimationFrame(raf);
+    el.frame.classList.remove("sponsored");
+    haptic([60, 50, 90]);
+
+    const isBest = S.score > M.best;
+    if (isBest) M.best = S.score;
+    save();
+
+    const total = S.right + S.wrong;
+    el.finalScore.textContent = S.score.toLocaleString();
+    el.finalRank.textContent = rankFor(S.score);
+    el.finalStreak.textContent = "\u00d7" + Math.max(1, S.bestStreak);
+    el.finalAcc.textContent = total ? Math.round(S.right / total * 100) + "%" : "0%";
+    el.finalHard.textContent = S.hardRight;
+    el.finalBest.textContent = M.best.toLocaleString();
+    el.btnRevive.style.display = S.revived ? "none" : "";
+    el.shareOut.style.display = "none";
+    paintTitleStats();
+    track("run_end", { score: S.score, cards: S.cards, hard_hit: S.hardRight, new_best: isBest });
+
+    // Interstitial from the second run onward \u2014 frequency capping, not greed.
+    if (M.runs >= 2) {
+      ADS.show("interstitial", function () { showScreen("over"); });
+    } else {
+      showScreen("over");
+    }
+  }
+
+  function revive() {
+    ADS.show("rewarded", function (earned) {
+      if (!earned) return;              // dismissed early \u2192 no reward
+      S.revived = true;
+      S.alive = true;
+      S.time = 60;
+      S.streak = 0;
+      S.mult = 1;
+      lastT = 0;
+      el.arena.innerHTML = "";
+      fillArena();
+      paintHud();
+      showScreen("play");
+      track("rewarded_revive", { score: S.score });
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(tick);
+    });
+  }
+
+  function paintTitleStats() {
+    el.bestTitle.textContent = M.best.toLocaleString();
+    el.rankTitle.textContent = rankFor(M.best);
+  }
+
+  /* ========================================================== 9. SHARE ========================================================== */
+  function share() {
+    const text =
+      "ROT CHECK \u2014 " + S.score.toLocaleString() + " pts\n" +
+      rankFor(S.score) + " \u00b7 \u00d7" + Math.max(1, S.bestStreak) + " best streak\n" +
+      "Can you tell real brainrot from AI slop?";
+    track("share", { score: S.score });
+    if (navigator.share) {
+      navigator.share({ title: "Rot Check", text: text, url: location.href })
+        .catch(function () { showShareText(text); });
+    } else {
+      showShareText(text);
+    }
+  }
+  function showShareText(text) {
+    el.shareOut.value = text + "\n" + location.href;
+    el.shareOut.style.display = "block";
+    el.shareOut.focus();
+    el.shareOut.select();
+    try { navigator.clipboard.writeText(el.shareOut.value); } catch (e) {}
+  }
+
+  /* ========================================================== 10. MOBILE LIFECYCLE ========================================================== */
+  /* Backgrounding the app must not silently drain the meter and kill a run. */
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      cancelAnimationFrame(raf);
+      save();
+    } else if (S && S.alive && el.sPlay.classList.contains("on") && !el.overlay.classList.contains("on")) {
+      lastT = 0;
+      raf = requestAnimationFrame(tick);
+    }
+  });
+  window.addEventListener("pagehide", save);
+
+  // block double-tap zoom without killing normal taps
+  let lastTap = 0;
+  document.addEventListener("touchend", function (e) {
+    const now = Date.now();
+    if (now - lastTap < 300) e.preventDefault();
+    lastTap = now;
+  }, { passive: false });
+  document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
+  document.addEventListener("contextmenu", function (e) {
+    if (e.target.closest(".card")) e.preventDefault();
+  });
+
+  /* ---- install prompt (Android/desktop get the real one, iOS gets a hint) ---- */
+  let deferredPrompt = null;
+  const dismissed = (function () { try { return localStorage.getItem("rotcheck.install") === "no"; } catch (e) { return false; } })();
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    /* install prompt omitted in the shareable build */
+  });
+  if (false) {
+    el.installCopy.innerHTML = "<b>Add Rot Check to your Home Screen</b><br>Tap Share, then \u201cAdd to Home Screen\u201d.";
+    el.installGo.style.display = "none";
+    el.install.classList.add("on");
+  }
+  el.installGo.addEventListener("click", function () {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function (r) {
+      track("install_prompt", { outcome: r.outcome });
+      el.install.classList.remove("on");
+      deferredPrompt = null;
+    });
+  });
+  el.installX.addEventListener("click", function () {
+    el.install.classList.remove("on");
+    try { localStorage.setItem("rotcheck.install", "no"); } catch (e) {}
+  });
+
+  /* service worker omitted in the shareable build */
+
+  /* ========================================================== 11. WIRING ========================================================== */
+  el.btnStart.addEventListener("click", startRun);
+  el.btnAgain.addEventListener("click", startRun);
+  el.btnRevive.addEventListener("click", revive);
+  el.btnShare.addEventListener("click", share);
+  el.btnFake.addEventListener("click", function () { answer(0); });
+  el.btnReal.addEventListener("click", function () { answer(1); });
+  el.ovSkip.addEventListener("click", function () { ADS.closeHouse(); });
+
+  el.metricsToggle.addEventListener("click", function () {
+    const open = el.metrics.classList.toggle("open");
+    el.metricsToggle.setAttribute("aria-expanded", String(open));
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!el.sPlay.classList.contains("on") || el.overlay.classList.contains("on")) return;
+    if (e.key === "ArrowLeft")  { e.preventDefault(); answer(0); }
+    if (e.key === "ArrowRight") { e.preventDefault(); answer(1); }
+  });
+
+  /* ---- shared deck ------------------------------------------------------
+     deck.json is the single source of content for every build. Its terms are
+     {t, r:bool, k:bool, n}; the game's internal shape is {t, r:0|1, d:2, h}.
+     The inline DECK above is only the fallback if nothing else loads. */
+  function adoptDeck(json) {
+    var terms = Array.isArray(json) ? json : (json && json.terms);
+    if (!Array.isArray(terms) || terms.length < 50) return false;
+    DECK = terms.map(function (x) {
+      return { t: x.t, r: x.r === true || x.r === 1 ? 1 : 0, d: x.k || x.d === 2 ? 2 : 1, h: x.n || x.h || "" };
+    });
+    track("deck_loaded", { count: DECK.length });
+    return true;
+  }
+  if (!adoptDeck(window.__DECK) && CONTENT_URL) {
+    fetch(CONTENT_URL)
+      .then(function (r) { return r.json(); })
+      .then(adoptDeck)
+      .catch(function () { /* play on the inline fallback */ });
+  }
+
+  paintTitleStats();
+  paintMetrics();
+  ADS.init();
+  track("app_open", { standalone: standalone });
+})();
+</script>

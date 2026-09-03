@@ -1,0 +1,11 @@
+# macOS / Xcode cruft that will show up once the project is created there
+.DS_Store
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+.build/
+
+# Python
+__pycache__/
+*.pyc
